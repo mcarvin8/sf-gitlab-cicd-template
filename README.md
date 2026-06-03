@@ -158,13 +158,9 @@ The list is converted to XML by `sf-package-list` and merged into the git-delta 
 
 **Repo recommendations**
 
-- Update the project's default MR description to include the `<Package>` template:
+- Update the project's default MR description to include the `<Package>` template.
 
-  ![Default Merge Request Description](.gitlab/images/default-merge-request-description.png)
-
-- Update the merge commit message template to include the MR description (`%{description}`):
-
-  ![Merge Commit Message Template](.gitlab/images/merge-commit-msg-template.png)
+- Update the merge commit message template to include the MR description (`%{description}`).
 
 ### Destructive Packages
 
