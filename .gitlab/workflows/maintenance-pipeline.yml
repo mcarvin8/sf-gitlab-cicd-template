@@ -16,7 +16,6 @@ releaseBranch:
     - when: never
   allow_failure: false
   script:
-    - echo y | sf plugins install sf-package-combiner@latest
     - source ./scripts/bash/create_release_branch.sh
   tags: 
     - aws,prd,us-west-2

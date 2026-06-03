@@ -64,7 +64,30 @@ destroy:fullqa:
   environment:
     name: fullqa
     url: https://avalara--fullqa.sandbox.my.salesforce.com
-  tags: 
+  tags:
+    - aws,prd,us-west-2
+
+destroy:fullqa:push:
+  image: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  extends: .delete-metadata-push
+  stage: destroy
+  resource_group: fullqa
+  rules:
+    - if: $FULLQA_DISABLED
+      when: never
+    - if: '$CI_COMMIT_MESSAGE =~ /chore\(metadata-retrieval\):/i'
+      when: never
+    - if: $CI_COMMIT_REF_NAME == 'fullqa' && $CI_PIPELINE_SOURCE == 'push'
+      when: always
+  allow_failure: true
+  variables:
+    AUTH_ALIAS: FULLQA
+    AUTH_URL: $FULLQA_AUTH_URL
+    GT_ANNOTATION_ENVIRONMENT: fqa
+  environment:
+    name: fullqa
+    url: https://avalara--fullqa.sandbox.my.salesforce.com
+  tags:
     - aws,prd,us-west-2
 
 merge:fullqa:

@@ -9,9 +9,8 @@
 .authenticate:
   before_script:
     - echo $AUTH_URL | sf org login sfdx-url --set-default --alias $AUTH_ALIAS --sfdx-url-stdin
-    - if [ "$CI_JOB_STAGE" == "destroy" ]; then
-        echo y | sf plugins install sf-package-list@latest;
-        source ./scripts/bash/create_destroy_package.sh; 
+    - if [ "$CI_JOB_STAGE" == "destroy" ] && [ -n "$PACKAGE" ]; then
+        source ./scripts/bash/create_destroy_package.sh;
       fi
     - testclasses=$(python3 ./scripts/python/package_check.py -x "$DEPLOY_PACKAGE" -s "$CI_JOB_STAGE" -e "$CI_ENVIRONMENT_NAME")
 
@@ -35,9 +34,6 @@
         coverage_format: cobertura
         path: coverage-cobertura.xml
   script:
-    - if [ "$testclasses" != "not a test" ];
-      then echo y | sf plugins install apex-code-coverage-transformer@latest || true; # don't fail if NPM has issues
-      fi
     - source ./scripts/bash/deploy_metadata_sf.sh
     - |
       COVERAGE_FILE="coverage-cobertura.xml"
@@ -72,6 +68,31 @@
     DEPLOY_PACKAGE: "destructive/destructiveChanges.xml"
     DESTRUCTIVE_PACKAGE: "destructive/package.xml"
   script:
+    - !reference [".gitlab-templates:sre:grafana:deployment-annotation:start", script]
+    - source ./scripts/bash/destroy_metadata_sf.sh
+  after_script:
+    - source ./scripts/bash/deploy_slack_status.sh; share_slack_update_build
+    - !reference [".gitlab-templates:sre:grafana:deployment-annotation:end", script]
+
+####################################################
+# Destroy metadata via sfdx-git-delta on push pipelines.
+# Runs sgd before package_check.py so the destructiveChanges.xml exists first.
+# allow_failure: true on callers — exits 0 when delta has no destructive types.
+####################################################
+.delete-metadata-push:
+  before_script:
+    - echo $AUTH_URL | sf org login sfdx-url --set-default --alias $AUTH_ALIAS --sfdx-url-stdin
+    - sf sgd source delta --from "$CI_COMMIT_BEFORE_SHA" --output-dir .
+    - testclasses=$(python3 ./scripts/python/package_check.py -x "$DEPLOY_PACKAGE" -s "$CI_JOB_STAGE" -e "$CI_ENVIRONMENT_NAME")
+  variables:
+    DEPLOY_PACKAGE: "destructiveChanges/destructiveChanges.xml"
+    DESTRUCTIVE_PACKAGE: "destructiveChanges/package.xml"
+  script:
+    - |
+      if ! grep -q '<types>' "$DEPLOY_PACKAGE" 2>/dev/null; then
+        echo "No destructive types in git delta, skipping destroy."
+        exit 0
+      fi
     - !reference [".gitlab-templates:sre:grafana:deployment-annotation:start", script]
     - source ./scripts/bash/destroy_metadata_sf.sh
   after_script:

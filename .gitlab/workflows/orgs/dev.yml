@@ -64,7 +64,30 @@ destroy:dev:
   environment:
     name: dev
     url: https://avalara--dev.sandbox.my.salesforce.com
-  tags: 
+  tags:
+    - aws,prd,us-west-2
+
+destroy:dev:push:
+  image: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  extends: .delete-metadata-push
+  stage: destroy
+  resource_group: develop
+  rules:
+    - if: $SANDBOX_DISABLED
+      when: never
+    - if: '$CI_COMMIT_MESSAGE =~ /chore\(metadata-retrieval\):/i'
+      when: never
+    - if: $CI_COMMIT_REF_NAME == 'develop' && $CI_PIPELINE_SOURCE == 'push'
+      when: always
+  allow_failure: true
+  variables:
+    AUTH_ALIAS: SANDBOX
+    AUTH_URL: $SANDBOX_AUTH_URL
+    GT_ANNOTATION_ENVIRONMENT: dev
+  environment:
+    name: dev
+    url: https://avalara--dev.sandbox.my.salesforce.com
+  tags:
     - aws,prd,us-west-2
 
 merge:dev:
