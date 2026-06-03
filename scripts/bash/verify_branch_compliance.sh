@@ -1,18 +1,28 @@
 #!/bin/bash
 ################################################################################
 # Script: verify_branch_compliance.sh
-# Description: Unified MR branch compliance for default branch, fullqa, and develop.
-#              - Default-branch MRs: merge-conflict check vs main, fullqa/develop
-#                merge + deploy verification, one predeploy job (org-specific),
-#                package.xml check, lineage rules.
-#              - fullqa/develop MRs: same lineage + package + predeploy for that
-#                org only (no merge-conflict trial merge; no fullqa/develop deploy gates).
+# Description: Unified MR branch compliance for default branch and lower-env org branches.
+#              - Default-branch MRs: merge-conflict check, lower-env merge + deploy
+#                verification, predeploy job status, package.xml check, lineage rules,
+#                release-branch per-story deployment verification.
+#              - Lower-env MRs: lineage + package + predeploy for that org only
+#                (no merge-conflict trial merge; no lower-env deploy gates).
+#
 # Usage: Sourced from GitLab CI (pre-merge-check jobs).
 # Dependencies: git, curl, jq (optional)
-# Environment: CI_COMMIT_SHA, CI_MERGE_REQUEST_*, CI_MERGE_REQUEST_DIFF_BASE_SHA,
-#              CI_PROJECT_ID, CI_SERVER_HOST, CI_PROJECT_PATH, MAINTAINER_PAT_VALUE,
-#              CI_DEFAULT_BRANCH
-# Optional: sf CLI + python3 for sfdx-git-delta manifest vs git-delta recommendation.
+#
+# Required env vars: CI_COMMIT_SHA, CI_MERGE_REQUEST_*, CI_MERGE_REQUEST_DIFF_BASE_SHA,
+#                    CI_PROJECT_ID, CI_SERVER_HOST, CI_PROJECT_PATH, MAINTAINER_PAT_VALUE,
+#                    CI_DEFAULT_BRANCH
+#
+# Configurable (with defaults):
+#   DEV_BRANCH (develop), FULLQA_BRANCH (fullqa)
+#   DEV_DEPLOY_JOB (deploy:dev), FULLQA_DEPLOY_JOB (deploy:fullqa)
+#   DEV_PREDEPLOY_JOB (test:predeploy:dev), FULLQA_PREDEPLOY_JOB (test:predeploy:fullqa)
+#   PRD_PREDEPLOY_JOB (test:predeploy:prd)
+#   VALID_BRANCH_PREFIXES (unset = skip branch name check)
+#
+# Optional: sf CLI + python3 for sfdx-git-delta manifest generation and package_check.py.
 ################################################################################
 set -euo pipefail
 
