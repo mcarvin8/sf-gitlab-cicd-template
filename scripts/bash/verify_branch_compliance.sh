@@ -49,11 +49,20 @@ check_required_var "CI_PROJECT_PATH"
 check_required_var "MAINTAINER_PAT_VALUE"
 check_required_var "CI_DEFAULT_BRANCH"
 
+# Configurable org branch and job names — override via CI/CD variables if your orgs differ
+DEV_BRANCH="${DEV_BRANCH:-develop}"
+FULLQA_BRANCH="${FULLQA_BRANCH:-fullqa}"
+DEV_DEPLOY_JOB="${DEV_DEPLOY_JOB:-deploy:dev}"
+FULLQA_DEPLOY_JOB="${FULLQA_DEPLOY_JOB:-deploy:fullqa}"
+DEV_PREDEPLOY_JOB="${DEV_PREDEPLOY_JOB:-test:predeploy:dev}"
+FULLQA_PREDEPLOY_JOB="${FULLQA_PREDEPLOY_JOB:-test:predeploy:fullqa}"
+PRD_PREDEPLOY_JOB="${PRD_PREDEPLOY_JOB:-test:predeploy:prd}"
+
 # Only run for MRs targeting default branch, fullqa, or develop
 if [[ "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" != "$CI_DEFAULT_BRANCH" && \
-      "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" != "fullqa" && \
-      "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" != "develop" ]]; then
-    print_status "$YELLOW" "Skipping: MR target is not default branch, fullqa, or develop ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME)"
+      "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" != "$FULLQA_BRANCH" && \
+      "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" != "$DEV_BRANCH" ]]; then
+    print_status "$YELLOW" "Skipping: MR target is not default branch, $FULLQA_BRANCH, or $DEV_BRANCH ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME)"
     exit 0
 fi
 
@@ -65,10 +74,10 @@ fi
 
 # One predeploy validation job name per MR target (each org has its own job in the MR pipeline)
 case "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" in
-    "$CI_DEFAULT_BRANCH") PREDEPLOY_JOB_NAME="test:predeploy:prd" ;;
-    fullqa)               PREDEPLOY_JOB_NAME="test:predeploy:fullqa" ;;
-    develop)              PREDEPLOY_JOB_NAME="test:predeploy:dev" ;;
-    *)                    PREDEPLOY_JOB_NAME="test:predeploy:prd" ;;
+    "$CI_DEFAULT_BRANCH") PREDEPLOY_JOB_NAME="$PRD_PREDEPLOY_JOB" ;;
+    "$FULLQA_BRANCH")     PREDEPLOY_JOB_NAME="$FULLQA_PREDEPLOY_JOB" ;;
+    "$DEV_BRANCH")        PREDEPLOY_JOB_NAME="$DEV_PREDEPLOY_JOB" ;;
+    *)                    PREDEPLOY_JOB_NAME="$PRD_PREDEPLOY_JOB" ;;
 esac
 
 if [[ "$MR_MODE" == "main" ]]; then
@@ -232,7 +241,7 @@ check_source_not_from_develop_fullqa() {
 
     local matching_commits
     matching_commits=$(git log --format="%H" --merges \
-        --grep="[Mm]erge.*into.*develop\|[Mm]erge.*into.*fullqa\|[Mm]erge.*into.*origin/develop\|[Mm]erge.*into.*origin/fullqa" \
+        --grep="[Mm]erge.*into.*${DEV_BRANCH}\|[Mm]erge.*into.*${FULLQA_BRANCH}\|[Mm]erge.*into.*origin/${DEV_BRANCH}\|[Mm]erge.*into.*origin/${FULLQA_BRANCH}" \
         "origin/$default_branch..$source_rev" 2>/dev/null || echo "")
     if [[ -n "$matching_commits" ]]; then
         while IFS= read -r commit; do
@@ -254,7 +263,7 @@ check_source_not_from_develop_fullqa() {
 check_forbidden_merges() {
     local source_rev=$1
     local default_branch=$2
-    local forbidden_branches=("fullqa" "develop")
+    local forbidden_branches=("$FULLQA_BRANCH" "$DEV_BRANCH")
     local offending_commits=()
     
     # Check commit messages on the source commit's history for forbidden merge patterns
@@ -730,13 +739,13 @@ check_deployment_job_status() {
 
 if [[ "$MR_MODE" == "main" ]]; then
     print_status "$YELLOW" "Checking fullqa branch..."
-    FULLQA_RESULT=$(check_branch_merged "fullqa" "$SOURCE_BRANCH_SHA")
+    FULLQA_RESULT=$(check_branch_merged "$FULLQA_BRANCH" "$SOURCE_BRANCH_SHA")
     FULLQA_EXISTS=$(echo "$FULLQA_RESULT" | cut -d'|' -f1)
     FULLQA_MERGED=$(echo "$FULLQA_RESULT" | cut -d'|' -f2)
     FULLQA_MERGE_COMMIT=$(echo "$FULLQA_RESULT" | cut -d'|' -f3)
 
     print_status "$YELLOW" "Checking develop branch..."
-    DEVELOP_RESULT=$(check_branch_merged "develop" "$SOURCE_BRANCH_SHA")
+    DEVELOP_RESULT=$(check_branch_merged "$DEV_BRANCH" "$SOURCE_BRANCH_SHA")
     DEVELOP_EXISTS=$(echo "$DEVELOP_RESULT" | cut -d'|' -f1)
     DEVELOP_MERGED=$(echo "$DEVELOP_RESULT" | cut -d'|' -f2)
     DEVELOP_MERGE_COMMIT=$(echo "$DEVELOP_RESULT" | cut -d'|' -f3)
@@ -886,24 +895,24 @@ DEVELOP_DEPLOY_COMMIT=""
 
 if [[ "$MR_MODE" == "main" ]]; then
     if [[ "$FULLQA_EXISTS" == "true" && "$FULLQA_MERGED" == "true" ]]; then
-        print_status "$YELLOW" "Searching for deploy:fullqa job in commits containing source SHA..."
-        FULLQA_RESULT=$(find_deploy_job_status "fullqa" "$SOURCE_BRANCH_SHA" "deploy:fullqa" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST" "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" 2>&1 | grep -v "Checking commit" | tail -1)
+        print_status "$YELLOW" "Searching for $FULLQA_DEPLOY_JOB job in commits containing source SHA..."
+        FULLQA_RESULT=$(find_deploy_job_status "$FULLQA_BRANCH" "$SOURCE_BRANCH_SHA" "$FULLQA_DEPLOY_JOB" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST" "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" 2>&1 | grep -v "Checking commit" | tail -1)
         FULLQA_DEPLOY_STATUS=$(echo "$FULLQA_RESULT" | cut -d'|' -f1)
         FULLQA_DEPLOY_COMMIT=$(echo "$FULLQA_RESULT" | cut -d'|' -f2)
-        print_status "$YELLOW" "  deploy:fullqa status: $FULLQA_DEPLOY_STATUS"
+        print_status "$YELLOW" "  $FULLQA_DEPLOY_JOB status: $FULLQA_DEPLOY_STATUS"
         if [[ -n "$FULLQA_DEPLOY_COMMIT" ]]; then
-            print_status "$YELLOW" "  deploy:fullqa commit: $FULLQA_DEPLOY_COMMIT"
+            print_status "$YELLOW" "  $FULLQA_DEPLOY_JOB commit: $FULLQA_DEPLOY_COMMIT"
         fi
     fi
 
     if [[ "$DEVELOP_EXISTS" == "true" && "$DEVELOP_MERGED" == "true" ]]; then
-        print_status "$YELLOW" "Searching for deploy:dev job in commits containing source SHA..."
-        DEVELOP_RESULT=$(find_deploy_job_status "develop" "$SOURCE_BRANCH_SHA" "deploy:dev" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST" "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" 2>&1 | grep -v "Checking commit" | tail -1)
+        print_status "$YELLOW" "Searching for $DEV_DEPLOY_JOB job in commits containing source SHA..."
+        DEVELOP_RESULT=$(find_deploy_job_status "$DEV_BRANCH" "$SOURCE_BRANCH_SHA" "$DEV_DEPLOY_JOB" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST" "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" 2>&1 | grep -v "Checking commit" | tail -1)
         DEVELOP_DEPLOY_STATUS=$(echo "$DEVELOP_RESULT" | cut -d'|' -f1)
         DEVELOP_DEPLOY_COMMIT=$(echo "$DEVELOP_RESULT" | cut -d'|' -f2)
-        print_status "$YELLOW" "  deploy:dev status: $DEVELOP_DEPLOY_STATUS"
+        print_status "$YELLOW" "  $DEV_DEPLOY_JOB status: $DEVELOP_DEPLOY_STATUS"
         if [[ -n "$DEVELOP_DEPLOY_COMMIT" ]]; then
-            print_status "$YELLOW" "  deploy:dev commit: $DEVELOP_DEPLOY_COMMIT"
+            print_status "$YELLOW" "  $DEV_DEPLOY_JOB commit: $DEVELOP_DEPLOY_COMMIT"
         fi
     fi
 fi
@@ -1039,8 +1048,10 @@ if [[ "$MR_MODE" == "main" ]]; then
                 # reconciliation, e.g. `git pull` with local+remote commits).
                 continue
             fi
+            dev_branch_lower=$(echo "$DEV_BRANCH" | tr '[:upper:]' '[:lower:]')
+            fullqa_branch_lower=$(echo "$FULLQA_BRANCH" | tr '[:upper:]' '[:lower:]')
             case "$story_branch_lower" in
-                main|master|develop|fullqa|"$default_branch_lower")
+                main|master|"$dev_branch_lower"|"$fullqa_branch_lower"|"$default_branch_lower")
                     continue
                     ;;
             esac
@@ -1096,9 +1107,9 @@ if [[ "$MR_MODE" == "main" ]]; then
             # --- fullqa ---
             story_fullqa_status=""
             story_fullqa_commit=""
-            if git show-ref --verify --quiet "refs/remotes/origin/fullqa" && \
-               git merge-base --is-ancestor "$story_sha" "origin/fullqa" 2>/dev/null; then
-                RES=$(find_deploy_job_status "fullqa" "$story_sha" "deploy:fullqa" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST" "$story_name" 2>&1 | grep -v "Checking commit" | tail -1)
+            if git show-ref --verify --quiet "refs/remotes/origin/$FULLQA_BRANCH" && \
+               git merge-base --is-ancestor "$story_sha" "origin/$FULLQA_BRANCH" 2>/dev/null; then
+                RES=$(find_deploy_job_status "$FULLQA_BRANCH" "$story_sha" "$FULLQA_DEPLOY_JOB" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST" "$story_name" 2>&1 | grep -v "Checking commit" | tail -1)
                 story_fullqa_status=$(echo "$RES" | cut -d'|' -f1)
                 story_fullqa_commit=$(echo "$RES" | cut -d'|' -f2)
             else
@@ -1110,9 +1121,9 @@ if [[ "$MR_MODE" == "main" ]]; then
             # --- develop ---
             story_dev_status=""
             story_dev_commit=""
-            if git show-ref --verify --quiet "refs/remotes/origin/develop" && \
-               git merge-base --is-ancestor "$story_sha" "origin/develop" 2>/dev/null; then
-                RES=$(find_deploy_job_status "develop" "$story_sha" "deploy:dev" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST" "$story_name" 2>&1 | grep -v "Checking commit" | tail -1)
+            if git show-ref --verify --quiet "refs/remotes/origin/$DEV_BRANCH" && \
+               git merge-base --is-ancestor "$story_sha" "origin/$DEV_BRANCH" 2>/dev/null; then
+                RES=$(find_deploy_job_status "$DEV_BRANCH" "$story_sha" "$DEV_DEPLOY_JOB" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST" "$story_name" 2>&1 | grep -v "Checking commit" | tail -1)
                 story_dev_status=$(echo "$RES" | cut -d'|' -f1)
                 story_dev_commit=$(echo "$RES" | cut -d'|' -f2)
             else
@@ -1121,7 +1132,7 @@ if [[ "$MR_MODE" == "main" ]]; then
             RELEASE_STORY_DEVELOP+=("$story_dev_status")
             RELEASE_STORY_DEVELOP_COMMIT+=("$story_dev_commit")
 
-            print_status "$YELLOW" "    [$story_name] fullqa=${story_fullqa_status:-?} dev=${story_dev_status:-?}"
+            print_status "$YELLOW" "    [$story_name] ${FULLQA_BRANCH}=${story_fullqa_status:-?} ${DEV_BRANCH}=${story_dev_status:-?}"
         done
     fi
 fi

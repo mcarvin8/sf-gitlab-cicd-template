@@ -166,7 +166,40 @@ Three jobs run here:
 
 - **pmd-code-check** - PMD static analysis on changed Apex classes and triggers. Runs on MR pipelines targeting any org branch.
 - **quality** - SonarQube quality gate, consumes coverage from `apex-code-coverage-transformer`. Delete if you don't run Sonar or update for a different quality platform.
-- **pre-merge-check** - MR branch compliance verification: branch age, forbidden merges, Jira key in branch name, predeploy job status, and deploy status on lower-env org branches. Posts a summary comment to the MR.
+- **pre-merge-check** - MR branch compliance verification driven by `verify_branch_compliance.sh`. Posts a structured summary comment to the MR on every push. See below for full details.
+
+#### Pre-Merge Compliance Checks (`verify_branch_compliance.sh`)
+
+Runs on every MR pipeline targeting `main`, `fullqa`, or `develop` (configurable). Checks:
+
+| Check | Default branch MRs | Sandbox MRs |
+| --- | --- | --- |
+| Branch age ≤ 30 days from default branch | ✓ | ✓ |
+| Branch name matches `VALID_BRANCH_PREFIXES` | ✓ | ✓ |
+| No forbidden merges from lower envs into source | ✓ | ✓ |
+| Source branched from main (not from sandbox) | ✓ | ✓ |
+| Merge conflict trial merge vs target | ✓ | — |
+| `package_check.py` passes on delta package | ✓ | ✓ |
+| Predeploy validate job passed | ✓ | ✓ |
+| Source SHA merged + deployed to fullqa and develop | ✓ | — |
+| Release branch: per-story deployment verification | ✓ | — |
+
+Results are posted as a structured comment on the MR (previous comments from this script are deleted and replaced on each push).
+
+**Configurable CI/CD variables:**
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DEV_BRANCH` | `develop` | Name of the dev sandbox branch |
+| `FULLQA_BRANCH` | `fullqa` | Name of the full QA branch |
+| `DEV_DEPLOY_JOB` | `deploy:dev` | GitLab job name for dev deploys |
+| `FULLQA_DEPLOY_JOB` | `deploy:fullqa` | GitLab job name for fullqa deploys |
+| `DEV_PREDEPLOY_JOB` | `test:predeploy:dev` | GitLab job name for dev predeploy validate |
+| `FULLQA_PREDEPLOY_JOB` | `test:predeploy:fullqa` | GitLab job name for fullqa predeploy validate |
+| `PRD_PREDEPLOY_JOB` | `test:predeploy:prd` | GitLab job name for production predeploy validate |
+| `VALID_BRANCH_PREFIXES` | _(unset)_ | Space-separated substrings required in MR source branch names. Leave unset to skip branch name enforcement. |
+
+`MAINTAINER_PAT_VALUE` is required — the script uses it to query the GitLab API for pipeline/job status and to post/delete MR comments.
 
 ### Destroy Stage
 
