@@ -140,6 +140,22 @@ metadataAudit:
     - source ./scripts/bash/metadata_audit.sh
 
 ####################################################
+# Audit @tests: annotation coverage across all Apex classes and triggers.
+# Prints a breakdown of files with valid, invalid, and missing annotations.
+# Trigger: scheduled pipeline with $JOB_NAME=testAnnotationAudit on any branch.
+####################################################
+testAnnotationAudit:
+  stage: maintenance
+  cache: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'testAnnotationAudit'
+      when: always
+    - when: never
+  allow_failure: false
+  script:
+    - python3 scripts/python/count_test_annotations.py
+
+####################################################
 # Executes GitLab sandbox refresh steps.
 ####################################################
 refreshSbxBranches:

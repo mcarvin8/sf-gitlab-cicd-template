@@ -52,3 +52,7 @@ variables:
   DESTRUCTIVE_TESTS: ""
   # Slack webhook URL for deploy/test status notifications. Remove or leave empty to disable.
   SLACK_WEBHOOK_URL: ""
+  # Space-separated list of required substrings for MR source branch names.
+  # pre-merge-check fails any branch not containing one of these strings.
+  # Leave empty to skip branch name enforcement entirely.
+  VALID_BRANCH_PREFIXES: ""

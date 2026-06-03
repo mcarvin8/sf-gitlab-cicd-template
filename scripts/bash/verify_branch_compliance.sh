@@ -183,42 +183,40 @@ else
     print_status "$YELLOW" "⚠ Could not determine branch age"
 fi
 
-# Function to check if source branch name contains valid Jira project key
-# Returns: "status" format
-# status: "valid" if contains valid Jira key, "invalid_bar" if contains BAR, "invalid_no_key" if no valid key found
+# Check if branch name contains any of the configured prefixes.
+# Set VALID_BRANCH_PREFIXES (space-separated) as a CI/CD variable to enable.
+# If unset the check is skipped and all branch names pass.
 check_branch_name() {
     local branch_name=$1
     local branch_lower=$(echo "$branch_name" | tr '[:upper:]' '[:lower:]')
-    
-    # Check if branch contains BAR (release team project) - fail if found
-    if [[ "$branch_lower" == *"bar"* ]]; then
-        echo "invalid_bar"
+
+    if [[ -z "${VALID_BRANCH_PREFIXES:-}" ]]; then
+        echo "skipped"
         return
     fi
-    
-    # Check if branch contains any valid Jira project keys (case insensitive)
-    local valid_keys=("q2c" "storm" "shield" "sfxpro" "leadz" "avatechtdr" "catalyst")
+
+    read -ra valid_keys <<< "$VALID_BRANCH_PREFIXES"
     for key in "${valid_keys[@]}"; do
-        if [[ "$branch_lower" == *"$key"* ]]; then
+        local key_lower=$(echo "$key" | tr '[:upper:]' '[:lower:]')
+        if [[ "$branch_lower" == *"$key_lower"* ]]; then
             echo "valid"
             return
         fi
     done
-    
-    # No valid key found
-    echo "invalid_no_key"
+
+    echo "invalid"
 }
 
-# Check branch name for valid Jira project key
-print_status "$YELLOW" "Checking source branch name for valid Jira project key..."
+# Check branch name against VALID_BRANCH_PREFIXES (skipped if variable unset).
+print_status "$YELLOW" "Checking source branch name against VALID_BRANCH_PREFIXES..."
 BRANCH_NAME_STATUS=$(check_branch_name "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME")
 
 if [[ "$BRANCH_NAME_STATUS" == "valid" ]]; then
-    print_status "$GREEN" "✓ Source branch name contains valid Jira project key"
-elif [[ "$BRANCH_NAME_STATUS" == "invalid_bar" ]]; then
-    print_status "$RED" "✗ Source branch name contains BAR (release team project)"
+    print_status "$GREEN" "✓ Branch name matches a configured prefix"
+elif [[ "$BRANCH_NAME_STATUS" == "invalid" ]]; then
+    print_status "$RED" "✗ Branch name does not match any prefix in VALID_BRANCH_PREFIXES (${VALID_BRANCH_PREFIXES})"
 else
-    print_status "$RED" "✗ Source branch name does not contain a valid Jira project key (q2c, storm, shield, sfxpro, leadz, catalyst, avatechtdr)"
+    print_status "$YELLOW" "⚠ Branch name check skipped (VALID_BRANCH_PREFIXES not set)"
 fi
 
 # Check if source contains merge commits that merged something INTO develop or fullqa.
@@ -1157,11 +1155,11 @@ COMMENT_BODY="## Branch Compliance Verification
 
 # Branch name check
 if [[ "$BRANCH_NAME_STATUS" == "valid" ]]; then
-    COMMENT_BODY+="- :white_check_mark: **Branch Name**: Source branch contains valid Jira project key"$'\n'
-elif [[ "$BRANCH_NAME_STATUS" == "invalid_bar" ]]; then
-    COMMENT_BODY+="- :x: **Branch Name**: Source branch contains BAR (release team project)"$'\n'
+    COMMENT_BODY+="- :white_check_mark: **Branch Name**: Matches a configured prefix in \`VALID_BRANCH_PREFIXES\`"$'\n'
+elif [[ "$BRANCH_NAME_STATUS" == "invalid" ]]; then
+    COMMENT_BODY+="- :x: **Branch Name**: Does not match any prefix in \`VALID_BRANCH_PREFIXES\` (\`${VALID_BRANCH_PREFIXES}\`)"$'\n'
 else
-    COMMENT_BODY+="- :x: **Branch Name**: Source branch does not contain a valid Jira project key (q2c, storm, shield, sfxpro, leadz, avatechtdr, catalyst)"$'\n'
+    COMMENT_BODY+="- :information_source: **Branch Name**: Check skipped (\`VALID_BRANCH_PREFIXES\` not set)"$'\n'
 fi
 
 # Branch age check
