@@ -115,6 +115,8 @@ Remove any of these jobs you don't need.
 
 Runs weekly on a scheduled pipeline. For each configured team, the `sf-git-ai-meta-insights` plugin generates a Markdown summary of metadata changes in the past week filtered by Jira key pattern, then uploads the result as an attachment to a Confluence page.
 
+> **Note:** `sf-git-ai-meta-insights` is **not** pre-installed in the Docker image — the `metadataAudit` job installs it at runtime. This is intentional: the job is optional and infrequent, so there is no reason to add the plugin to the base image used by every pipeline job.
+
 **Required CI/CD variables:**
 
 | Variable | Purpose |
