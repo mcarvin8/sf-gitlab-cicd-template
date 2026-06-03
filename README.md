@@ -111,6 +111,47 @@ The jobs that perform git operations require a GitLab project access token with 
 
 Remove any of these jobs you don't need.
 
+#### Metadata Audit (`metadataAudit`)
+
+Runs weekly on a scheduled pipeline. For each configured team, the `sf-git-ai-meta-insights` plugin generates a Markdown summary of metadata changes in the past week filtered by Jira key pattern, then uploads the result as an attachment to a Confluence page.
+
+**Required CI/CD variables:**
+
+| Variable | Purpose |
+| --- | --- |
+| `METADATA_AUDIT_TEAMS` | Space-separated list of teams to audit. Each entry is `team` or `team:jira-regex`. When no colon is given the team name is used as the commit-message filter. Example: `backend frontend:fe- platform` |
+| `CONFLUENCE_USER` | Confluence username (email) |
+| `CONFLUENCE_TOKEN` | Confluence API token |
+| `CONFLUENCE_PAGE_ID` | ID of the Confluence page to attach summaries to |
+| `CONFLUENCE_BASE_URL` | Confluence base URL, e.g. `https://yourorg.atlassian.net` |
+| `LLM_BASE_URL` | OpenAI-compatible endpoint base URL |
+| `LLM_DEFAULT_HEADERS` | JSON string of auth headers, e.g. `{"Authorization":"Bearer <token>"}` |
+
+If you use an ALFA proxy (internal LLM gateway), you can set `ALFA_PROXY_URL`, `ALFA_PROJECT_UUID`, and `ALFA_PAT_TOKEN` instead of `LLM_BASE_URL` / `LLM_DEFAULT_HEADERS` — the script constructs the headers automatically.
+
+Set `METADATA_AUDIT_FAIL_ON_ALFA_ERROR=1` to make the job fail if any team's plugin invocation errors (default is to warn and continue).
+
+#### Johnny Agent Promotion (`johnnyPromoteMR`)
+
+When an AI triage service account (default: `svc-johnny-triage-agent`) opens a merge request targeting `main`, this job automatically creates companion MRs from the same source branch into `develop` and `fullqa`. This ensures agent-authored work flows through the full 3-branch promotion path rather than landing only in production.
+
+The job is idempotent — if an open MR from the same source branch into the target already exists, it is skipped.
+
+**Required CI/CD variables:**
+
+| Variable | Purpose |
+| --- | --- |
+| `MAINTAINER_PAT_VALUE` | GitLab PAT with `api` scope (same token used by other maintenance jobs) |
+
+**Optional CI/CD variables:**
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `JOHNNY_BOT_USERNAME` | `svc-johnny-triage-agent` | GitLab username of the AI service account |
+| `JOHNNY_PROMOTION_TARGETS` | `develop fullqa` | Space-separated list of branches to open companion MRs into |
+
+Remove this job if you are not using an AI triage agent in your workflow.
+
 ### Test Stage
 
 Validates and tests metadata changes before they merge.

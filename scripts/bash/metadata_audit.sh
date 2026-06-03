@@ -2,9 +2,9 @@
 ################################################################################
 # Script: metadata_audit.sh
 # Description:
-#   Weekly metadata audit: for each tracked team, runs the sf-git-ai-meta-insights
-#   plugin (OpenAI-compatible LLM) against ALFA using environment variables, then
-#   uploads the generated Markdown summary to Confluence.
+#   Weekly metadata audit: for each configured team, runs the sf-git-ai-meta-insights
+#   plugin (OpenAI-compatible LLM) against the past week of commits filtered by
+#   Jira key pattern, then uploads the generated Markdown summary to Confluence.
 #
 #   One `git log origin/main` resolves the FROM ref (last commit strictly before
 #   one week ago). The plugin is invoked once per team with --commit-message-include
@@ -21,62 +21,70 @@
 #   - jq
 #
 # Required Environment Variables:
+#   # Teams (space-separated; each entry is "team" or "team:jira-regex")
+#   - METADATA_AUDIT_TEAMS    # e.g. "backend frontend:fe- platform" — team name is
+#                             # used as the output filename; jira-regex filters commits.
+#                             # When no colon is given, team name is used as the regex.
+#
 #   # Confluence
 #   - CONFLUENCE_USER
 #   - CONFLUENCE_TOKEN
-#   - CONFLUENCE_PAGE_ID      # e.g. 638886675099 (Metadata Manifest Audits 2026)
+#   - CONFLUENCE_PAGE_ID
+#   - CONFLUENCE_BASE_URL     # e.g. https://yourorg.atlassian.net
 #
-#   # ALFA → LLM_BASE_URL and LLM_DEFAULT_HEADERS for sf-git-ai-meta-insights
-#   - ALFA_PROJECT_UUID       # inserted as Authorization: sk-<ALFA_PROJECT_UUID>
-#   - ALFA_PAT_TOKEN          # inserted as x-alfa-rbac (RBAC token from ALFA)
-#   - ALFA_PROXY_URL          # required unless LLM_BASE_URL is set; script uses <ALFA_PROXY_URL>/v1
+#   # LLM — option A: set LLM_BASE_URL + LLM_DEFAULT_HEADERS directly
+#   - LLM_BASE_URL            # OpenAI-compatible endpoint base URL
+#   - LLM_DEFAULT_HEADERS     # JSON auth headers, e.g. '{"Authorization":"Bearer <token>"}'
+#
+#   # LLM — option B: ALFA proxy (constructs LLM_BASE_URL and LLM_DEFAULT_HEADERS)
+#   - ALFA_PROXY_URL          # proxy base URL; script appends nothing (use full base)
+#   - ALFA_PROJECT_UUID       # inserted as Authorization: Bearer sk-<uuid>
+#   - ALFA_PAT_TOKEN          # inserted as x-alfa-authorization header
 #
 # Optional:
-#   - LLM_BASE_URL            # if set, used as-is (else ${ALFA_PROXY_URL}/v1)
 #   - METADATA_AUDIT_FAIL_ON_ALFA_ERROR=1  # exit if the plugin fails for any team
 #   - METADATA_AUDIT_TO=origin/main        # end ref for summarize (default: origin/main)
-#
-# Teams Tracked (Jira key patterns for -m):
-#   q2c, leadz, sfxpro, storm, shield
 ################################################################################
 
 # --- Required env var checks ---------------------------------------------------
+
+: "${METADATA_AUDIT_TEAMS:?Must set METADATA_AUDIT_TEAMS (space-separated team or team:regex entries)}"
 
 : "${CONFLUENCE_USER:?Must set CONFLUENCE_USER}"
 : "${CONFLUENCE_TOKEN:?Must set CONFLUENCE_TOKEN}"
 : "${CONFLUENCE_PAGE_ID:?Must set CONFLUENCE_PAGE_ID}"
 : "${CONFLUENCE_BASE_URL:?Must set CONFLUENCE_BASE_URL (e.g. https://yourorg.atlassian.net)}"
 
-: "${ALFA_PROJECT_UUID:?Must set ALFA_PROJECT_UUID (Authorization sk-<uuid>)}"
-: "${ALFA_PAT_TOKEN:?Must set ALFA_PAT_TOKEN (x-alfa-rbac)}"
-
-# LLM_BASE_URL: explicit override, else ALFA proxy
-if [[ -n "${LLM_BASE_URL:-}" ]]; then
+# LLM auth: use LLM_DEFAULT_HEADERS directly, or construct from ALFA vars
+if [[ -n "${LLM_DEFAULT_HEADERS:-}" ]]; then
+  : "${LLM_BASE_URL:?Must set LLM_BASE_URL when providing LLM_DEFAULT_HEADERS}"
   export LLM_BASE_URL="${LLM_BASE_URL%/}"
+  export LLM_DEFAULT_HEADERS
 else
-  : "${ALFA_PROXY_URL:?Must set ALFA_PROXY_URL or LLM_BASE_URL}"
-  ALFA_PROXY_URL="${ALFA_PROXY_URL%/}"
-  export LLM_BASE_URL="${ALFA_PROXY_URL}"
+  : "${ALFA_PROJECT_UUID:?Set ALFA_PROJECT_UUID and ALFA_PAT_TOKEN, or set LLM_DEFAULT_HEADERS + LLM_BASE_URL directly}"
+  : "${ALFA_PAT_TOKEN:?Set ALFA_PAT_TOKEN and ALFA_PROJECT_UUID, or set LLM_DEFAULT_HEADERS + LLM_BASE_URL directly}"
+  if [[ -z "${LLM_BASE_URL:-}" ]]; then
+    : "${ALFA_PROXY_URL:?Must set ALFA_PROXY_URL or LLM_BASE_URL}"
+    export LLM_BASE_URL="${ALFA_PROXY_URL%/}"
+  fi
+  # When debugging: printf '%s\n' "$LLM_DEFAULT_HEADERS" — do NOT use echo (brace expansion risk)
+  export LLM_DEFAULT_HEADERS
+  LLM_DEFAULT_HEADERS="$(jq -nc --arg rbac "$ALFA_PAT_TOKEN" --arg uuid "$ALFA_PROJECT_UUID" \
+    '{"x-alfa-authorization": $rbac, "Authorization": ("Bearer sk-" + $uuid)}')"
 fi
-
-# LLM_DEFAULT_HEADERS: Authorization sk-<project uuid>, RBAC token in x-alfa-rbac
-# (matches PowerShell: '{"x-alfa-rbac":"<pat>","Authorization":"sk-<uuid>"}')
-# When debugging in Bash, print with: printf '%s\n' "$LLM_DEFAULT_HEADERS"
-# Do not use: echo $LLM_DEFAULT_HEADERS  (unquoted — JSON starts with { and Bash applies brace expansion)
-export LLM_DEFAULT_HEADERS
-LLM_DEFAULT_HEADERS="$(jq -nc --arg rbac "$ALFA_PAT_TOKEN" --arg uuid "$ALFA_PROJECT_UUID" '{"x-alfa-authorization": $rbac, "Authorization": ("Bearer sk-" + $uuid)}')"
 
 METADATA_AUDIT_TO="${METADATA_AUDIT_TO:-origin/main}"
 
-# Jira project key patterns (regex, OR within --commit-message-include per run)
-declare -A TEAM_JIRA_REGEX=(
-  ["q2c"]="q2c"
-  ["leadz"]="leadz"
-  ["sfxpro"]="sfxpro"
-  ["storm"]="storm"
-  ["shield"]="shield"
-  ["avatechtdr"]="avatechtdr"
-)
+# Parse METADATA_AUDIT_TEAMS into an associative array of team -> jira regex.
+# Each entry is "team" (regex defaults to team name) or "team:regex".
+declare -A TEAM_JIRA_REGEX=()
+for entry in $METADATA_AUDIT_TEAMS; do
+  if [[ "$entry" == *:* ]]; then
+    TEAM_JIRA_REGEX["${entry%%:*}"]="${entry#*:}"
+  else
+    TEAM_JIRA_REGEX["$entry"]="$entry"
+  fi
+done
 
 # --- Git setup ----------------------------------------------------------------
 
@@ -100,7 +108,7 @@ timestamp=$(date +"%Y-%m-%d")
 
 # --- Per-team: plugin summarize → Confluence ----------------------------------
 
-for team in q2c leadz sfxpro storm shield avatechtdr; do
+for team in "${!TEAM_JIRA_REGEX[@]}"; do
   jira_regex="${TEAM_JIRA_REGEX[$team]}"
   summary_file="${team}-summary-${timestamp}.md"
 
