@@ -111,12 +111,6 @@ PACKAGE_CHECK_STATUS=""
 PACKAGE_CHECK_OUTPUT=""
 PACKAGE_CHECK_WARNINGS=""
 
-# Manifest vs additive git delta (sfdx-git-delta); recommendation only — not a gate
-MANIFEST_DELTA_STATUS="skipped"
-MANIFEST_DELTA_EXCESS=""
-MANIFEST_DELTA_MISSING=""
-MANIFEST_DELTA_DETAIL=""
-
 # Function to check how old the source commit is relative to the default branch
 # Returns: "status|age_days|merge_base_sha" format
 # status: "recent" if <= 30 days, "old" if > 30 days, "error" if unable to determine
@@ -493,58 +487,55 @@ if [[ "$CURRENT_SHA" != "$SOURCE_BRANCH_SHA" ]]; then
 fi
 print_status "$GREEN" "✓ Checked out source branch commit $SOURCE_BRANCH_SHA"
 
-# Manifest vs additive git delta (constructive package only; destructiveChanges ignored)
-COMPARE_MANIFEST_SCRIPT="scripts/python/compare_manifest_to_git_delta.py"
-
-if [[ -n "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" ]] && command -v sf &>/dev/null && command -v python3 &>/dev/null && [[ -f "$COMPARE_MANIFEST_SCRIPT" ]]; then
+# Generate incremental deployment package from git delta + optional MR description extra metadata.
+# The combined package is written to $PACKAGE_XML_PATH for the compliance package check below.
+if [[ -n "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" ]] && command -v sf &>/dev/null; then
     if ! git cat-file -e "${CI_MERGE_REQUEST_DIFF_BASE_SHA}^{commit}" 2>/dev/null; then
         print_status "$YELLOW" "Fetching merge-request diff base ${CI_MERGE_REQUEST_DIFF_BASE_SHA:0:8}..."
         git fetch -q origin "${CI_MERGE_REQUEST_DIFF_BASE_SHA}" 2>/dev/null || true
     fi
     if git cat-file -e "${CI_MERGE_REQUEST_DIFF_BASE_SHA}^{commit}" 2>/dev/null; then
         rm -rf package destructiveChanges
+        mkdir -p manifest
         print_status "$YELLOW" "Running sf sgd source delta (from diff base to HEAD)..."
         set +e
-        sgd_out=$(sf sgd source delta --from "$CI_MERGE_REQUEST_DIFF_BASE_SHA" --to "HEAD" --output-dir . 2>&1)
+        sgd_out=$(sf sgd source delta --from "$CI_MERGE_REQUEST_DIFF_BASE_SHA" --output-dir . 2>&1)
         sgd_rc=$?
         set -e
         if [[ $sgd_rc -ne 0 ]]; then
-            MANIFEST_DELTA_STATUS="error"
-            MANIFEST_DELTA_DETAIL=$(echo "$sgd_out" | tail -c 800)
-            print_status "$YELLOW" "⚠ sfdx-git-delta failed (non-fatal for compliance)"
-        elif [[ -f "package/package.xml" ]] && [[ -f "$PACKAGE_XML_PATH" ]]; then
-            mapfile -t _mdlines < <(python3 "$COMPARE_MANIFEST_SCRIPT" "package/package.xml" "$PACKAGE_XML_PATH" 2>/dev/null || printf '%s\n' "error" "" "")
-            MANIFEST_DELTA_STATUS="${_mdlines[0]:-error}"
-            MANIFEST_DELTA_EXCESS="${_mdlines[1]:-}"
-            MANIFEST_DELTA_MISSING="${_mdlines[2]:-}"
-            if [[ "$MANIFEST_DELTA_STATUS" == "aligned" ]]; then
-                print_status "$GREEN" "✓ Manifest vs additive git delta: aligned (recommendation check)"
-            elif [[ "$MANIFEST_DELTA_STATUS" == "warning" ]]; then
-                print_status "$YELLOW" "⚠ Manifest vs git delta: consider trimming manifest or adding missing types (see MR comment)"
-            else
-                print_status "$YELLOW" "⚠ Manifest vs git delta compare: $MANIFEST_DELTA_STATUS"
-            fi
-        elif [[ ! -f "$PACKAGE_XML_PATH" ]]; then
-            MANIFEST_DELTA_DETAIL="manifest/package.xml not found at this commit"
+            print_status "$YELLOW" "⚠ sfdx-git-delta failed: $(echo "$sgd_out" | tail -c 400)"
         else
-            MANIFEST_DELTA_STATUS="skipped"
-            MANIFEST_DELTA_DETAIL="sfdx-git-delta did not emit package/package.xml for this range"
-            print_status "$YELLOW" "⚠ sfdx-git-delta: no package/package.xml (no constructive delta or empty)"
+            DELTA_PKG="package/package.xml"
+            EXTRA_LIST="_compliance_extra_package.txt"
+            EXTRA_XML="_compliance_extra_package.xml"
+            HAS_EXTRA=false
+            if echo "${CI_MERGE_REQUEST_DESCRIPTION:-}" | grep -q '<Package>'; then
+                echo "${CI_MERGE_REQUEST_DESCRIPTION}" | sed -n '/<Package>/,/<\/Package>/p' | sed '1d;$d' > "$EXTRA_LIST"
+                if [[ -s "$EXTRA_LIST" ]]; then
+                    sf sfpl xml -l "$EXTRA_LIST" -x "$EXTRA_XML" -n 2>/dev/null && HAS_EXTRA=true
+                fi
+            fi
+            DELTA_HAS_TYPES=false
+            grep -q '<types>' "$DELTA_PKG" 2>/dev/null && DELTA_HAS_TYPES=true
+            if [[ "$DELTA_HAS_TYPES" == "true" ]] && [[ "$HAS_EXTRA" == "true" ]]; then
+                sf sfpc combine -f "$DELTA_PKG" -f "$EXTRA_XML" -c "$PACKAGE_XML_PATH" -n
+            elif [[ "$HAS_EXTRA" == "true" ]]; then
+                cp "$EXTRA_XML" "$PACKAGE_XML_PATH"
+            else
+                cp "$DELTA_PKG" "$PACKAGE_XML_PATH"
+            fi
+            rm -f "$EXTRA_LIST" "$EXTRA_XML"
+            print_status "$GREEN" "✓ Generated deployment package for compliance check"
         fi
         rm -rf package destructiveChanges
     else
-        MANIFEST_DELTA_DETAIL="Could not resolve CI_MERGE_REQUEST_DIFF_BASE_SHA (ensure clone/fetch includes that commit; try unshallow)"
-        print_status "$YELLOW" "⚠ $MANIFEST_DELTA_DETAIL"
+        print_status "$YELLOW" "⚠ Could not resolve CI_MERGE_REQUEST_DIFF_BASE_SHA — skipping package generation"
     fi
 else
     if [[ -z "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" ]]; then
-        MANIFEST_DELTA_DETAIL="CI_MERGE_REQUEST_DIFF_BASE_SHA not set"
-    elif ! command -v sf &>/dev/null; then
-        MANIFEST_DELTA_DETAIL="sf CLI not found"
-    elif ! command -v python3 &>/dev/null; then
-        MANIFEST_DELTA_DETAIL="python3 not found"
+        print_status "$YELLOW" "⚠ CI_MERGE_REQUEST_DIFF_BASE_SHA not set — skipping package generation"
     else
-        MANIFEST_DELTA_DETAIL="compare_manifest_to_git_delta.py not found"
+        print_status "$YELLOW" "⚠ sf CLI not found — skipping package generation"
     fi
 fi
 
@@ -1340,26 +1331,6 @@ elif [[ "$PACKAGE_CHECK_STATUS" == "error" ]]; then
     COMMENT_BODY+="- :warning: **Package.xml Compliance**: Could not perform check - $ERROR_DISPLAY"$'\n'
 else
     COMMENT_BODY+="- :warning: **Package.xml Compliance**: Check status unknown"$'\n'
-fi
-
-# sfdx-git-delta vs manifest (recommendation only; does not fail the job)
-if [[ "$MANIFEST_DELTA_STATUS" == "aligned" ]]; then
-    COMMENT_BODY+="- :white_check_mark: **Manifest vs git delta** (\`sfdx-git-delta\`, constructive only): \`manifest/package.xml\` aligns with additive changes (\`CI_MERGE_REQUEST_DIFF_BASE_SHA\` → HEAD)"$'\n'
-elif [[ "$MANIFEST_DELTA_STATUS" == "warning" ]]; then
-    COMMENT_BODY+="- :bulb: **Manifest vs git delta** (recommendation): Declare in \`manifest/package.xml\` only metadata you actually changed (Add/Modify) so deploys stay minimal. Details below."$'\n'
-    if [[ -n "$MANIFEST_DELTA_EXCESS" ]]; then
-        EXCESS_SNIP=$(echo "$MANIFEST_DELTA_EXCESS" | cut -c1-500)
-        COMMENT_BODY+="  - **Listed in manifest but not in additive diff:** \`$EXCESS_SNIP\`"$'\n'
-    fi
-    if [[ -n "$MANIFEST_DELTA_MISSING" ]]; then
-        MISSING_SNIP=$(echo "$MANIFEST_DELTA_MISSING" | cut -c1-500)
-        COMMENT_BODY+="  - **In additive diff but not listed in manifest:** \`$MISSING_SNIP\`"$'\n'
-    fi
-elif [[ "$MANIFEST_DELTA_STATUS" == "error" ]]; then
-    ERR_SNIP=$(echo "$MANIFEST_DELTA_DETAIL" | tr '\n' ' ' | cut -c1-400)
-    COMMENT_BODY+="- :warning: **Manifest vs git delta**: Compare failed (sfdx-git-delta or parser). $ERR_SNIP"$'\n'
-else
-    COMMENT_BODY+="- :information_source: **Manifest vs git delta**: Skipped — ${MANIFEST_DELTA_DETAIL:-N/A}"$'\n'
 fi
 
 if [[ "$MR_MODE" == "main" ]]; then

@@ -56,10 +56,6 @@ else
   git revert -X ours --no-commit "$SHA" || true
 fi
 
-# Re-insert the commit's package.xml to re-deploy the correct package
-git checkout $SHA -- manifest/package.xml
-git add manifest/package.xml
-
 # Commit changes
 git commit -m "Reverts changes of $SHA, Triggered by: $GITLAB_USER_NAME"
 

@@ -116,7 +116,7 @@ if [[ -n $(git status --porcelain force-app/) ]]; then
     git commit -m "chore(metadata-retrieval): $PACKAGE_NAME @ $branch_name"
 
     # Job-only manifest changes must not block rebase; drop them (pipeline Git supports git restore).
-    git restore manifest/
+    rm -rf manifest/
 
     max_push_attempts="${GIT_PUSH_MAX_ATTEMPTS:-5}"
     attempt=1
