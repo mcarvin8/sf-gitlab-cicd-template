@@ -124,12 +124,10 @@ Runs weekly on a scheduled pipeline. For each configured team, the `sf-git-ai-me
 | `CONFLUENCE_TOKEN` | Confluence API token |
 | `CONFLUENCE_PAGE_ID` | ID of the Confluence page to attach summaries to |
 | `CONFLUENCE_BASE_URL` | Confluence base URL, e.g. `https://yourorg.atlassian.net` |
-| `LLM_BASE_URL` | OpenAI-compatible endpoint base URL |
-| `LLM_DEFAULT_HEADERS` | JSON string of auth headers, e.g. `{"Authorization":"Bearer <token>"}` |
+| `LLM_BASE_URL` | OpenAI-compatible endpoint base URL — passed directly to `sf-git-ai-meta-insights` |
+| `LLM_DEFAULT_HEADERS` | JSON auth headers for your LLM provider, e.g. `{"Authorization":"Bearer <token>"}` — passed directly to the plugin |
 
-If you use an ALFA proxy (internal LLM gateway), you can set `ALFA_PROXY_URL`, `ALFA_PROJECT_UUID`, and `ALFA_PAT_TOKEN` instead of `LLM_BASE_URL` / `LLM_DEFAULT_HEADERS` — the script constructs the headers automatically.
-
-Set `METADATA_AUDIT_FAIL_ON_ALFA_ERROR=1` to make the job fail if any team's plugin invocation errors (default is to warn and continue).
+Set `METADATA_AUDIT_FAIL_ON_ERROR=1` to make the job exit if any team's plugin invocation errors (default is to warn and continue).
 
 #### Johnny Agent Promotion (`johnnyPromoteMR`)
 

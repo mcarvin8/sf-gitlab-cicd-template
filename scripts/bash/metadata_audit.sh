@@ -32,18 +32,13 @@
 #   - CONFLUENCE_PAGE_ID
 #   - CONFLUENCE_BASE_URL     # e.g. https://yourorg.atlassian.net
 #
-#   # LLM — option A: set LLM_BASE_URL + LLM_DEFAULT_HEADERS directly
+#   # LLM (passed directly to sf-git-ai-meta-insights as standard env vars)
 #   - LLM_BASE_URL            # OpenAI-compatible endpoint base URL
 #   - LLM_DEFAULT_HEADERS     # JSON auth headers, e.g. '{"Authorization":"Bearer <token>"}'
 #
-#   # LLM — option B: ALFA proxy (constructs LLM_BASE_URL and LLM_DEFAULT_HEADERS)
-#   - ALFA_PROXY_URL          # proxy base URL; script appends nothing (use full base)
-#   - ALFA_PROJECT_UUID       # inserted as Authorization: Bearer sk-<uuid>
-#   - ALFA_PAT_TOKEN          # inserted as x-alfa-authorization header
-#
 # Optional:
-#   - METADATA_AUDIT_FAIL_ON_ALFA_ERROR=1  # exit if the plugin fails for any team
-#   - METADATA_AUDIT_TO=origin/main        # end ref for summarize (default: origin/main)
+#   - METADATA_AUDIT_FAIL_ON_ERROR=1  # exit if the plugin fails for any team (default: warn and continue)
+#   - METADATA_AUDIT_TO=origin/main   # end ref for summarize (default: origin/main)
 ################################################################################
 
 # --- Required env var checks ---------------------------------------------------
@@ -55,23 +50,10 @@
 : "${CONFLUENCE_PAGE_ID:?Must set CONFLUENCE_PAGE_ID}"
 : "${CONFLUENCE_BASE_URL:?Must set CONFLUENCE_BASE_URL (e.g. https://yourorg.atlassian.net)}"
 
-# LLM auth: use LLM_DEFAULT_HEADERS directly, or construct from ALFA vars
-if [[ -n "${LLM_DEFAULT_HEADERS:-}" ]]; then
-  : "${LLM_BASE_URL:?Must set LLM_BASE_URL when providing LLM_DEFAULT_HEADERS}"
-  export LLM_BASE_URL="${LLM_BASE_URL%/}"
-  export LLM_DEFAULT_HEADERS
-else
-  : "${ALFA_PROJECT_UUID:?Set ALFA_PROJECT_UUID and ALFA_PAT_TOKEN, or set LLM_DEFAULT_HEADERS + LLM_BASE_URL directly}"
-  : "${ALFA_PAT_TOKEN:?Set ALFA_PAT_TOKEN and ALFA_PROJECT_UUID, or set LLM_DEFAULT_HEADERS + LLM_BASE_URL directly}"
-  if [[ -z "${LLM_BASE_URL:-}" ]]; then
-    : "${ALFA_PROXY_URL:?Must set ALFA_PROXY_URL or LLM_BASE_URL}"
-    export LLM_BASE_URL="${ALFA_PROXY_URL%/}"
-  fi
-  # When debugging: printf '%s\n' "$LLM_DEFAULT_HEADERS" — do NOT use echo (brace expansion risk)
-  export LLM_DEFAULT_HEADERS
-  LLM_DEFAULT_HEADERS="$(jq -nc --arg rbac "$ALFA_PAT_TOKEN" --arg uuid "$ALFA_PROJECT_UUID" \
-    '{"x-alfa-authorization": $rbac, "Authorization": ("Bearer sk-" + $uuid)}')"
-fi
+: "${LLM_BASE_URL:?Must set LLM_BASE_URL (OpenAI-compatible endpoint base URL)}"
+: "${LLM_DEFAULT_HEADERS:?Must set LLM_DEFAULT_HEADERS (JSON auth headers for your LLM provider)}"
+export LLM_BASE_URL="${LLM_BASE_URL%/}"
+export LLM_DEFAULT_HEADERS
 
 METADATA_AUDIT_TO="${METADATA_AUDIT_TO:-origin/main}"
 
@@ -125,7 +107,7 @@ for team in "${!TEAM_JIRA_REGEX[@]}"; do
     --output "$summary_file" --ignore-whitespace \
     --model "o4-mini"; then
     echo "WARNING: sf sgai metadata summarize failed for team '${team}'." >&2
-    if [[ "${METADATA_AUDIT_FAIL_ON_ALFA_ERROR:-}" == "1" ]]; then
+    if [[ "${METADATA_AUDIT_FAIL_ON_ERROR:-}" == "1" ]]; then
       exit 1
     fi
     continue
