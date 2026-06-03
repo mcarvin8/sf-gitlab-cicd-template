@@ -47,8 +47,8 @@ fi
 
 # salesforce cli hardcodes exit code 68 for --async jobs
 if [ "$EXIT_CODE" -eq 68 ]; then
-  echo "Sandbox refresh request submitted successfully to Salesforce. Please monitor your email to see when sandbox is ready..."
-  echo "Monitor sandbox refresh status here in the portal: https://avalara.lightning.force.com/lightning/setup/DataManagementCreateTestInstance/home"
+  echo "Sandbox refresh request submitted successfully to Salesforce. Please monitor your email to see when sandbox is ready."
+  echo "Monitor sandbox refresh status in your org's Setup > Sandbox page."
   exit 0
 elif [ "$EXIT_CODE" -ne 0 ]; then
   echo "❌ Salesforce CLI returned unexpected error code $EXIT_CODE"

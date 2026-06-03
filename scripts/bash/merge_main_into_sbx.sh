@@ -23,8 +23,6 @@ function handle_delete_conflicts() {
 }
 
 # Must fetch before checking out fullqa and develop branches
-# Configure bot user name and bot user email address - https://scm.platform.us-west-2.avalara.io/help/user/project/settings/project_access_tokens
-# Bot Email Address template: project_{project_id}_bot_{random_string}@noreply.{Gitlab.config.gitlab.host}
 git fetch -q
 git config user.name "${MAINTAINER_PAT_NAME}"
 git config user.email "${MAINTAINER_PAT_USER_NAME}@noreply.${CI_SERVER_HOST}"

@@ -261,4 +261,6 @@ The scripts in `scripts/bash/` and `scripts/python/` are not GitLab-specific - t
 | `$DEV_ORG_URL` | display URL for the dev sandbox environment (cosmetic, shown in GitLab environments) |
 | `$FULLQA_ORG_URL` | display URL for the full QA sandbox environment |
 | `$PRODUCTION_ORG_URL` | display URL for the production environment |
+| `$VALID_BRANCH_PREFIXES` | space-separated substrings required in MR source branch names; `pre-merge-check` fails branches that match none. Leave empty to skip enforcement. |
+| `$CONFLUENCE_BASE_URL` | Confluence base URL for `metadataAudit` job (e.g. `https://yourorg.atlassian.net`) |
 | `$MAINTAINER_PAT_NAME` / `$MAINTAINER_PAT_USER_NAME` / `$MAINTAINER_PAT_VALUE` | project access token used by maintenance jobs that push to the repo |

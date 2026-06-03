@@ -125,7 +125,8 @@ pipelineCleanup:
     - source ./scripts/bash/delete_stale_pipelines.sh
 
 ####################################################
-# Weekly metadata audit: AI summaries (sf-git-ai-meta-insights + ALFA) to Confluence.
+# Weekly metadata audit: AI summaries via sf-git-ai-meta-insights uploaded to Confluence.
+# Configure TEAM_JIRA_REGEX in metadata_audit.sh and set CONFLUENCE_* + LLM vars.
 ####################################################
 metadataAudit:
   stage: maintenance

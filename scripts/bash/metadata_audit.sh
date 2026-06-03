@@ -45,6 +45,7 @@
 : "${CONFLUENCE_USER:?Must set CONFLUENCE_USER}"
 : "${CONFLUENCE_TOKEN:?Must set CONFLUENCE_TOKEN}"
 : "${CONFLUENCE_PAGE_ID:?Must set CONFLUENCE_PAGE_ID}"
+: "${CONFLUENCE_BASE_URL:?Must set CONFLUENCE_BASE_URL (e.g. https://yourorg.atlassian.net)}"
 
 : "${ALFA_PROJECT_UUID:?Must set ALFA_PROJECT_UUID (Authorization sk-<uuid>)}"
 : "${ALFA_PAT_TOKEN:?Must set ALFA_PAT_TOKEN (x-alfa-rbac)}"
@@ -133,7 +134,7 @@ for team in q2c leadz sfxpro storm shield avatechtdr; do
     -H "X-Atlassian-Token: nocheck" \
     -F "file=@${summary_file}" \
     -F 'minorEdit=true' \
-    "https://avalara.atlassian.net/wiki/rest/api/content/${CONFLUENCE_PAGE_ID}/child/attachment" \
+    "${CONFLUENCE_BASE_URL}/wiki/rest/api/content/${CONFLUENCE_PAGE_ID}/child/attachment" \
     >/dev/null || echo "WARNING: Failed to upload ${summary_file} for team ${team}"
 done
 
