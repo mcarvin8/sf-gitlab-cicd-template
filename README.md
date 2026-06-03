@@ -116,8 +116,8 @@ Remove any of these jobs you don't need.
 Validates and tests metadata changes before they merge.
 
 - **Validate** - on a merge request, `sfdx-git-delta` generates an incremental package from `CI_MERGE_REQUEST_DIFF_BASE_SHA` to `HEAD`, merges any `<Package>` extra metadata from the MR description, and validates the combined package against the target org. One validate job per org (in `.gitlab/workflows/orgs/<org>.yml`).
-- **Unit Test** - a [scheduled pipeline](https://docs.gitlab.com/ci/pipelines/schedules/) with `$JOB_NAME=unitTest` runs all local Apex tests in the target org. Requires `$AUTH_URL` and `$AUTH_ALIAS`.
-- **Code Coverage** - `apex-code-coverage-transformer` produces JaCoCo reports rendered natively in GitLab 17+ MR diffs.
+- **Unit Test** - org-specific jobs (`test:unit:dev`, `test:unit:fullqa`, `test:unit:prd`) defined in each org file run all local Apex tests against that org. Each job is gated to its org branch, so scheduling a pipeline on `develop` with `$JOB_NAME=unitTest` runs tests only against the dev sandbox. Create a separate [scheduled pipeline](https://docs.gitlab.com/ci/pipelines/schedules/) per org branch and set `$JOB_NAME=unitTest` as a pipeline variable.
+- **Code Coverage** - `test:postrun:<org>` runs 90 minutes after `test:unit:<org>`, retrieves results, and uses `apex-code-coverage-transformer` to produce JaCoCo reports rendered natively in GitLab 17+ MR diffs.
 
 ### Quality Stage
 
