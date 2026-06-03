@@ -1,6 +1,7 @@
 ####################################################
 # FullQA Org Jobs
-# All deployment jobs for the full QA environment
+# All deployment jobs for the full QA (sandbox) environment.
+# Set FULLQA_ORG_URL, FULLQA_AUTH_URL as CI/CD variables in your project.
 ####################################################
 
 test:predeploy:fullqa:
@@ -19,9 +20,7 @@ test:predeploy:fullqa:
     AUTH_URL: $FULLQA_AUTH_URL
   environment:
     name: validate-fullqa
-    url: https://avalara--fullqa.sandbox.my.salesforce.com
-  tags: 
-    - aws,prd,us-west-2
+    url: $FULLQA_ORG_URL
 
 deploy:fullqa:
   image: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
@@ -39,12 +38,9 @@ deploy:fullqa:
   variables:
     AUTH_ALIAS: FULLQA
     AUTH_URL: $FULLQA_AUTH_URL
-    GT_ANNOTATION_ENVIRONMENT: fqa
   environment:
     name: fullqa
-    url: https://avalara--fullqa.sandbox.my.salesforce.com
-  tags: 
-    - aws,prd,us-west-2
+    url: $FULLQA_ORG_URL
 
 destroy:fullqa:
   image: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
@@ -60,12 +56,9 @@ destroy:fullqa:
   variables:
     AUTH_ALIAS: FULLQA
     AUTH_URL: $FULLQA_AUTH_URL
-    GT_ANNOTATION_ENVIRONMENT: fqa
   environment:
     name: fullqa
-    url: https://avalara--fullqa.sandbox.my.salesforce.com
-  tags:
-    - aws,prd,us-west-2
+    url: $FULLQA_ORG_URL
 
 destroy:fullqa:push:
   image: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
@@ -83,12 +76,9 @@ destroy:fullqa:push:
   variables:
     AUTH_ALIAS: FULLQA
     AUTH_URL: $FULLQA_AUTH_URL
-    GT_ANNOTATION_ENVIRONMENT: fqa
   environment:
     name: fullqa
-    url: https://avalara--fullqa.sandbox.my.salesforce.com
-  tags:
-    - aws,prd,us-west-2
+    url: $FULLQA_ORG_URL
 
 merge:fullqa:
   extends: .auto-merge
@@ -103,6 +93,4 @@ merge:fullqa:
   allow_failure: false
   environment:
     name: fullqa
-    url: https://avalara--fullqa.sandbox.my.salesforce.com
-  tags: 
-    - aws,prd,us-west-2
+    url: $FULLQA_ORG_URL

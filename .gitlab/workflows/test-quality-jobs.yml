@@ -4,38 +4,34 @@
 ####################################################
 
 ####################################################
-# Run all local tests in fullqa on a schedule.
-# Coverage results will be passed to SonarQube.
+# Run all local Apex tests on a schedule.
+# Trigger: scheduled pipeline with $JOB_NAME=unitTest.
+# Set $AUTH_URL and $AUTH_ALIAS in CI/CD variables for the target org.
+# Coverage results are passed to SonarQube via test:postrun.
 ####################################################
 test:unit:
   stage: test
   rules:
-    # this pipeline is current failing in the "test:postrun" stage for unknown reason. tests run in the org but the delay may not be enough anymore.
-    # removing this rule until the developer teams actually have a use case for this Run All Local Test pipline outside of SonarQube.
-    #- if: $CI_COMMIT_REF_NAME == 'fullqa' && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'localTests'
-      #when: always
+    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest'
+      when: always
     - when: never
   allow_failure: false
   artifacts:
     paths:
       - test_run_id.txt
-    expire_in: 1 day 
+    expire_in: 1 day
   script:
-    - echo $FULLQA_AUTH_URL | sf org login sfdx-url --set-default --alias FULLQA --sfdx-url-stdin
+    - echo $AUTH_URL | sf org login sfdx-url --set-default --alias $AUTH_ALIAS --sfdx-url-stdin
     - sf apex run test --test-level RunLocalTests --result-format human > ./id.txt
     - source ./scripts/bash/extract_test_id.sh
-  tags:
-    - aws,prd,us-west-2
 
 test:postrun:
   stage: test
   rules:
-    # this pipeline is current failing in the "test:postrun" stage for unknown reason. tests run in the org but the delay may not be enough anymore.
-    # removing this rule until the developer teams actually have a use case for this Run All Local Test pipline outside of SonarQube.
-    #- if: $CI_COMMIT_REF_NAME == 'fullqa' && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'localTests'
-      #when: delayed
-      #start_in: 90 minutes
-      #needs: ['test:unit']
+    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest'
+      when: delayed
+      start_in: 90 minutes
+      needs: ['test:unit']
     - when: never
   allow_failure: false
   artifacts:
@@ -45,20 +41,18 @@ test:postrun:
     expire_in: 2 weeks
   script:
     - TEST_RUN_ID=$(cat test_run_id.txt)
-    - echo $FULLQA_AUTH_URL | sf org login sfdx-url --set-default --alias FULLQA --sfdx-url-stdin
-    # set || true so job passes even if there are failed tests
+    - echo $AUTH_URL | sf org login sfdx-url --set-default --alias $AUTH_ALIAS --sfdx-url-stdin
+    # set || true so the job passes even if there are test failures
     - sf apex get test --test-run-id $TEST_RUN_ID --code-coverage -r json -d "coverage" > result.json || true
     - source ./scripts/bash/parse_test_result.sh
   after_script:
     - source ./scripts/bash/post_test_result.sh; share_slack_update_build
-  tags:
-    - aws,prd,us-west-2
 
 ####################################################
-# Scan the code base with PMD.
+# Scan changed Apex with PMD.
 ####################################################
 pmd-code-check:
-  image: artifacts.platform.avalara.io/docker/eclipse-temurin:17
+  image: eclipse-temurin:17
   stage: quality
   allow_failure: true
   cache: []
@@ -87,15 +81,14 @@ pmd-code-check:
       - pmd-report.xml
       - coverage-sonar.xml
     expire_in: 2 weeks
-  tags:
-    - aws,prd,us-west-2
 
 ####################################################
 # SonarQube quality gate analysis.
+# Remove this job if you are not running SonarQube.
 ####################################################
 quality:
   image:
-    name: artifacts.platform.avalara.io/docker/sonarsource/sonar-scanner-cli:5.0.1
+    name: sonarsource/sonar-scanner-cli:5.0.1
   stage: quality
   cache:
     key: $CI_JOB_NAME
@@ -143,8 +136,6 @@ quality:
           -Dsonar.gitlab.commit_sha=$CI_COMMIT_SHORT_SHA \
           -Dsonar.apex.pmd.reportPaths=pmd-report.xml
       fi
-  tags:
-    - aws,prd,us-west-2
 
 ####################################################
 # MR GitLab Workflow Compliance Checks (main + sandbox).
@@ -160,5 +151,3 @@ pre-merge-check:
   cache: []
   script:
     - source ./scripts/bash/verify_branch_compliance.sh
-  tags:
-    - aws,prd,us-west-2

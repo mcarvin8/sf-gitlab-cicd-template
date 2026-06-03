@@ -1,18 +1,19 @@
 ####################################################
 # Core Pipeline Jobs
-# Build and other pipeline infrastructure jobs
+# Build stage: Docker image build and package-list validation
 ####################################################
 
 ####################################################
-# Build a unique Docker image for the org.
+# Build a Docker image for the org branch.
+# Only runs on push to org branches when the Dockerfile changes.
 ####################################################
 build:
-  image: artifacts.platform.avalara.io/docker/docker:20.10.16
+  image: docker:latest
   stage: build
   cache: []
   services:
-    - name: artifacts.platform.avalara.io/docker/docker:20.10.16-dind
-      alias: docker  
+    - name: docker:dind
+      alias: docker
   rules:
     - if: ($CI_COMMIT_REF_NAME == 'develop' || $CI_COMMIT_REF_NAME == 'fullqa' || $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH) && $CI_PIPELINE_SOURCE == 'push'
       changes:
@@ -22,18 +23,43 @@ build:
   allow_failure: false
   variables:
     IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
-    DOCKER_HOST: tcp://docker:2376 #Necessary for k8s
+    DOCKER_HOST: tcp://docker:2376
     DOCKER_TLS_CERTDIR: "/certs"
     DOCKER_TLS_VERIFY: 1
     DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
-  # wait until docker in docker service is ready
   before_script:
     - until docker info; do sleep 1; done
   script:
     - echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER $CI_REGISTRY --password-stdin
-    # If the current branch is the main/default branch, tag the image as the "production" image.
     - if [ $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH ]; then IMAGE_TAG=$CI_REGISTRY_IMAGE:production; fi
     - docker build --tag $IMAGE_TAG .
     - docker push $IMAGE_TAG
-  tags: 
-    - aws,prd,us-west-2
+
+####################################################
+# Validate the <Package> block in the MR description using sf-package-list.
+# Non-blocking advisory check — runs before the validate job touches an org.
+####################################################
+validate:package-list:
+  stage: build
+  cache: []
+  rules:
+    - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'develop' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == $CI_DEFAULT_BRANCH
+      when: never
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'develop'
+      when: always
+  allow_failure: false
+  script:
+    - |
+      if echo "$CI_MERGE_REQUEST_DESCRIPTION" | grep -q '<Package>'; then
+        echo "$CI_MERGE_REQUEST_DESCRIPTION" | sed -n '/<Package>/,/<\/Package>/p' | sed '1d;$d' > /tmp/mr_package.txt
+        if [ -s /tmp/mr_package.txt ]; then
+          echo "Validating <Package> block in MR description..."
+          sf sfpl xml -l /tmp/mr_package.txt -x /tmp/mr_package_check.xml -n
+          echo "Package list is valid. Contents:"
+          sf sfpl list -x /tmp/mr_package_check.xml
+        else
+          echo "Empty <Package> block in MR description."
+        fi
+      else
+        echo "No <Package> block in MR description."
+      fi

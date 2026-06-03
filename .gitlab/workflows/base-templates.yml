@@ -4,23 +4,31 @@
 ####################################################
 
 ####################################################
-# Authenticate to a Salesforce org.
+# Authenticate to a Salesforce org and prepare the deployment package.
+# For deploy/test stages: generates an incremental package via sfdx-git-delta
+# and merges any extra metadata declared in the <Package> block of $COMMIT_MSG.
+# For web destroy stage: converts $PACKAGE (sf-package-list format) to XML.
 ####################################################
 .authenticate:
   before_script:
     - echo $AUTH_URL | sf org login sfdx-url --set-default --alias $AUTH_ALIAS --sfdx-url-stdin
     - if [ "$CI_JOB_STAGE" == "destroy" ] && [ -n "$PACKAGE" ]; then
         source ./scripts/bash/create_destroy_package.sh;
+      elif [ "$CI_JOB_STAGE" != "destroy" ]; then
+        source ./scripts/bash/generate_delta_package.sh;
       fi
     - testclasses=$(python3 ./scripts/python/package_check.py -x "$DEPLOY_PACKAGE" -s "$CI_JOB_STAGE" -e "$CI_ENVIRONMENT_NAME")
 
 ####################################################
-# Validate metadata against a Salesforce org.
-# Uses source branch in a MR as the reference, not the target branch.
-# Does not simulate the actual merge itself, so validation may be inaccurate against sandboxes.
+# Validate metadata against a Salesforce org (MR pipelines).
+# BEFORE_SHA: common ancestor of source and target branch.
+# COMMIT_MSG: MR description (may contain <Package> extra metadata block).
 ####################################################
 .validate-metadata:
   extends: .authenticate
+  variables:
+    BEFORE_SHA: $CI_MERGE_REQUEST_DIFF_BASE_SHA
+    COMMIT_MSG: $CI_MERGE_REQUEST_DESCRIPTION
   coverage: '/TOTAL.+ ([0-9]{1,3}(?:\.[0-9]+)?%)/'
   artifacts:
     when: always
@@ -48,19 +56,22 @@
     - source ./scripts/bash/deploy_slack_status.sh; share_slack_update_build
 
 ####################################################
-# Deploy metadata into a Salesforce org.
+# Deploy metadata into a Salesforce org (push pipelines).
+# BEFORE_SHA: SHA immediately before this push (CI_COMMIT_BEFORE_SHA).
+# COMMIT_MSG: merge commit message (may contain <Package> extra metadata block).
 ####################################################
 .deploy-metadata:
   extends: .authenticate
+  variables:
+    BEFORE_SHA: $CI_COMMIT_BEFORE_SHA
+    COMMIT_MSG: $CI_COMMIT_MESSAGE
   script:
-    - !reference [".gitlab-templates:sre:grafana:deployment-annotation:start", script]
     - source ./scripts/bash/deploy_metadata_sf.sh
   after_script:
     - source ./scripts/bash/deploy_slack_status.sh; share_slack_update_build
-    - !reference [".gitlab-templates:sre:grafana:deployment-annotation:end", script]
 
 ####################################################
-# Delete metadata in a Salesforce org.
+# Delete metadata in a Salesforce org (web pipeline, $PACKAGE provided).
 ####################################################
 .delete-metadata:
   extends: .authenticate
@@ -68,11 +79,9 @@
     DEPLOY_PACKAGE: "destructive/destructiveChanges.xml"
     DESTRUCTIVE_PACKAGE: "destructive/package.xml"
   script:
-    - !reference [".gitlab-templates:sre:grafana:deployment-annotation:start", script]
     - source ./scripts/bash/destroy_metadata_sf.sh
   after_script:
     - source ./scripts/bash/deploy_slack_status.sh; share_slack_update_build
-    - !reference [".gitlab-templates:sre:grafana:deployment-annotation:end", script]
 
 ####################################################
 # Destroy metadata via sfdx-git-delta on push pipelines.
@@ -93,11 +102,9 @@
         echo "No destructive types in git delta, skipping destroy."
         exit 0
       fi
-    - !reference [".gitlab-templates:sre:grafana:deployment-annotation:start", script]
     - source ./scripts/bash/destroy_metadata_sf.sh
   after_script:
     - source ./scripts/bash/deploy_slack_status.sh; share_slack_update_build
-    - !reference [".gitlab-templates:sre:grafana:deployment-annotation:end", script]
 
 ####################################################
 # Complete a merge request in a pipeline.

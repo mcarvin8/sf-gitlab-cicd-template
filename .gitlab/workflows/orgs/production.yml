@@ -1,6 +1,7 @@
 ####################################################
 # Production Org Jobs
-# All deployment jobs for the production environment
+# All deployment jobs for the production environment.
+# Set PRODUCTION_ORG_URL, PRODUCTION_AUTH_URL as CI/CD variables in your project.
 ####################################################
 
 test:predeploy:prd:
@@ -18,9 +19,7 @@ test:predeploy:prd:
     AUTH_URL: $PRODUCTION_AUTH_URL
   environment:
     name: validate-production
-    url: https://avalara.my.salesforce.com
-  tags: 
-    - aws,prd,us-west-2
+    url: $PRODUCTION_ORG_URL
 
 deploy:prd:
   extends: .deploy-metadata
@@ -37,12 +36,9 @@ deploy:prd:
   variables:
     AUTH_ALIAS: PRODUCTION
     AUTH_URL: $PRODUCTION_AUTH_URL
-    GT_ANNOTATION_ENVIRONMENT: prd
   environment:
     name: production
-    url: https://avalara.my.salesforce.com
-  tags: 
-    - aws,prd,us-west-2
+    url: $PRODUCTION_ORG_URL
 
 destroy:prd:
   extends: .delete-metadata
@@ -57,12 +53,9 @@ destroy:prd:
   variables:
     AUTH_ALIAS: PRODUCTION
     AUTH_URL: $PRODUCTION_AUTH_URL
-    GT_ANNOTATION_ENVIRONMENT: prd
   environment:
     name: production
-    url: https://avalara.my.salesforce.com
-  tags:
-    - aws,prd,us-west-2
+    url: $PRODUCTION_ORG_URL
 
 destroy:prd:push:
   extends: .delete-metadata-push
@@ -79,12 +72,9 @@ destroy:prd:push:
   variables:
     AUTH_ALIAS: PRODUCTION
     AUTH_URL: $PRODUCTION_AUTH_URL
-    GT_ANNOTATION_ENVIRONMENT: prd
   environment:
     name: production
-    url: https://avalara.my.salesforce.com
-  tags:
-    - aws,prd,us-west-2
+    url: $PRODUCTION_ORG_URL
 
 merge:prd:
   extends: .auto-merge
@@ -99,6 +89,4 @@ merge:prd:
   allow_failure: false
   environment:
     name: production
-    url: https://avalara.my.salesforce.com
-  tags: 
-    - aws,prd,us-west-2
+    url: $PRODUCTION_ORG_URL

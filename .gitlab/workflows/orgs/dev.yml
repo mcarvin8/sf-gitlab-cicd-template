@@ -1,6 +1,7 @@
 ####################################################
-# Common Dev Org Jobs
-# All deployment jobs for the development environment
+# Dev Org Jobs
+# All deployment jobs for the development (sandbox) environment.
+# Set DEV_ORG_URL, SANDBOX_AUTH_URL as CI/CD variables in your project.
 ####################################################
 
 test:predeploy:dev:
@@ -19,9 +20,7 @@ test:predeploy:dev:
     AUTH_URL: $SANDBOX_AUTH_URL
   environment:
     name: validate-dev
-    url: https://avalara--dev.sandbox.my.salesforce.com
-  tags: 
-    - aws,prd,us-west-2
+    url: $DEV_ORG_URL
 
 deploy:dev:
   image: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
@@ -39,12 +38,9 @@ deploy:dev:
   variables:
     AUTH_ALIAS: SANDBOX
     AUTH_URL: $SANDBOX_AUTH_URL
-    GT_ANNOTATION_ENVIRONMENT: dev
   environment:
     name: dev
-    url: https://avalara--dev.sandbox.my.salesforce.com
-  tags: 
-    - aws,prd,us-west-2
+    url: $DEV_ORG_URL
 
 destroy:dev:
   image: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
@@ -60,12 +56,9 @@ destroy:dev:
   variables:
     AUTH_ALIAS: SANDBOX
     AUTH_URL: $SANDBOX_AUTH_URL
-    GT_ANNOTATION_ENVIRONMENT: dev
   environment:
     name: dev
-    url: https://avalara--dev.sandbox.my.salesforce.com
-  tags:
-    - aws,prd,us-west-2
+    url: $DEV_ORG_URL
 
 destroy:dev:push:
   image: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
@@ -83,12 +76,9 @@ destroy:dev:push:
   variables:
     AUTH_ALIAS: SANDBOX
     AUTH_URL: $SANDBOX_AUTH_URL
-    GT_ANNOTATION_ENVIRONMENT: dev
   environment:
     name: dev
-    url: https://avalara--dev.sandbox.my.salesforce.com
-  tags:
-    - aws,prd,us-west-2
+    url: $DEV_ORG_URL
 
 merge:dev:
   extends: .auto-merge
@@ -103,6 +93,4 @@ merge:dev:
   allow_failure: false
   environment:
     name: dev
-    url: https://avalara--dev.sandbox.my.salesforce.com
-  tags: 
-    - aws,prd,us-west-2
+    url: $DEV_ORG_URL
