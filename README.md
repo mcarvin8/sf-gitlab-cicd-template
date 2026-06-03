@@ -164,7 +164,7 @@ Validates and tests metadata changes before they merge.
 
 Three jobs run here:
 
-- **pmd-code-check** - PMD static analysis on changed Apex classes and triggers. Runs on MR pipelines targeting any org branch.
+- **pmd-code-check** - PMD static analysis on changed Apex classes and triggers. Runs on MR pipelines targeting any org branch. Rules are in `scripts/pmd/enforced/default_apex.xml`. The enforced ruleset includes the `UnusedMethod` rule, which requires PMD to know which external namespaces call into your code — otherwise it false-positives on methods invoked by managed packages. The `plugins.dependencies` array in `sfdx-project.json` provides that namespace list. If your project has no managed package dependencies or you remove `UnusedMethod` from the ruleset, clear `plugins.dependencies` to an empty array.
 - **quality** - SonarQube quality gate, consumes coverage from `apex-code-coverage-transformer`. Delete if you don't run Sonar or update for a different quality platform.
 - **pre-merge-check** - MR branch compliance verification driven by `verify_branch_compliance.sh`. Posts a structured summary comment to the MR on every push. See below for full details.
 
