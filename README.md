@@ -188,6 +188,24 @@ Apex tests are required when a deployment includes Apex classes or triggers. The
 - Apex classes and triggers must be [annotated](https://github.com/renatoliveira/apex-test-list) with `@tests:` to declare their test classes.
 - Files marked `@isTest` are automatically treated as their own test class.
 
+### CMT-Driven Test Overrides
+
+For Apex members whose correct test class depends on a Custom Metadata switch field at deploy time, `package_check.py` supports per-member test overrides via `package_check_cmt_tests.json`.
+
+Use this when a single Apex class or trigger has two valid sets of tests (e.g. a feature flag controls which handler version is active) and the `@tests:` annotation alone cannot express both branches.
+
+Each rule in `package_check_cmt_tests.json` targets one Apex member and specifies:
+
+- which CMT record and checkbox field to read
+- which test classes to run when the switch is **on** (`tests_when_enabled`)
+- which test classes to run when the switch is **off** (`tests_when_disabled`)
+
+When a rule's `apex_name` is present in the deployment package, `package_check.py` reads the switch field — from the CMT file in the package if it is being deployed, or by querying the target org otherwise — and substitutes the appropriate test set for that member. Members with no matching rule continue to use their `@tests:` annotation.
+
+Annotations are the default. CMT rules are opt-in and only activate when the Apex member appears in the package.
+
+See `package_check_cmt_tests.json` for the full rule schema. Set `"rules": []` to disable the feature entirely.
+
 ### Destructive Apex Tests
 
 Destroying Apex in production requires running Apex tests with the destructive deployment. Set `DESTRUCTIVE_TESTS` as a CI/CD variable to a space-separated list of test classes to run.
