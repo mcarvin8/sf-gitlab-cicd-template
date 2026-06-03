@@ -1,12 +1,22 @@
 {
+  "_schema": {
+    "apex_type": "ApexClass | ApexTrigger",
+    "apex_name": "API name of the Apex class or trigger",
+    "cmt_record_qualified_name": "CmtType.DeveloperName — used to locate the CMT record in the package or query the org",
+    "cmt_object_api_name": "(optional) override the derived object API name (e.g. MyType__mdt)",
+    "cmt_developer_name": "(optional) override the derived DeveloperName for the org query",
+    "switch_field": "(optional) checkbox field API name on the CMT object; defaults to Turn_on__c",
+    "tests_when_enabled": "test class name(s) to run when the switch field is true — string or array",
+    "tests_when_disabled": "test class name(s) to run when the switch field is false — string or array"
+  },
   "rules": [
     {
       "apex_type": "ApexTrigger",
-      "apex_name": "OpportunityTrigger",
-      "cmt_record_qualified_name": "SwitchForAutomation.OpportunityTriggerHandler_V2",
+      "apex_name": "MyTrigger",
+      "cmt_record_qualified_name": "MySwitchType.MyTriggerSwitch",
       "switch_field": "Turn_on__c",
-      "tests_when_enabled": "OpportunityTriggerHandlerTest_V2",
-      "tests_when_disabled": "OpportunityTriggerHandlerTest"
+      "tests_when_enabled": "MyTriggerHandlerTestV2",
+      "tests_when_disabled": "MyTriggerHandlerTest"
     }
   ]
 }
