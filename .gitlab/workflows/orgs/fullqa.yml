@@ -79,18 +79,3 @@ destroy:fullqa:push:
   environment:
     name: fullqa
     url: $FULLQA_ORG_URL
-
-merge:fullqa:
-  extends: .auto-merge
-  stage: merge
-  resource_group: merge-fullqa
-  needs: []
-  rules:
-    - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'develop' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == $CI_DEFAULT_BRANCH
-      when: never
-    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'fullqa'
-      when: manual
-  allow_failure: false
-  environment:
-    name: fullqa
-    url: $FULLQA_ORG_URL

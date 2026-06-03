@@ -75,18 +75,3 @@ destroy:prd:push:
   environment:
     name: production
     url: $PRODUCTION_ORG_URL
-
-merge:prd:
-  extends: .auto-merge
-  stage: merge
-  resource_group: merge-prd
-  needs: []
-  rules:
-    - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'develop' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'fullqa'
-      when: never
-    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
-      when: manual
-  allow_failure: false
-  environment:
-    name: production
-    url: $PRODUCTION_ORG_URL

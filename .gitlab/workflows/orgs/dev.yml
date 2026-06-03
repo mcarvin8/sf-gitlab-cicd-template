@@ -79,18 +79,3 @@ destroy:dev:push:
   environment:
     name: dev
     url: $DEV_ORG_URL
-
-merge:dev:
-  extends: .auto-merge
-  stage: merge
-  resource_group: merge-dev
-  needs: []
-  rules:
-    - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == $CI_DEFAULT_BRANCH
-      when: never
-    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'develop'
-      when: manual
-  allow_failure: false
-  environment:
-    name: dev
-    url: $DEV_ORG_URL

@@ -106,10 +106,3 @@
   after_script:
     - source ./scripts/bash/deploy_slack_status.sh; share_slack_update_build
 
-####################################################
-# Complete a merge request in a pipeline.
-####################################################
-.auto-merge:
-  cache: []
-  script:
-    - source ./scripts/bash/auto_merge.sh

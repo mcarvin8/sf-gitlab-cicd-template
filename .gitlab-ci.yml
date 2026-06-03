@@ -34,7 +34,6 @@ stages:
   - maintenance
   - test
   - quality
-  - merge
   - destroy
   - deploy
 
