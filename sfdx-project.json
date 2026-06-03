@@ -9,25 +9,7 @@
   "sfdcLoginUrl": "https://login.salesforce.com",
   "plugins": {
     "dependencies": [
-      { "namespace": "blng" },
-      { "namespace": "CameleonCPQ" },
-      { "namespace": "ChargentBase" },
-      { "namespace": "ChargentOrders" },
-      { "namespace": "ChrgntBllng" },
-      { "namespace": "ContinuousCB" },
-      { "namespace": "ContinuousSFBU" },
-      { "namespace": "dfscpq" },
-      { "namespace": "dfsle" },
-      { "namespace": "dsfs" },
-      { "namespace": "fferpcore" },
-      { "namespace": "Gong" },
-      { "namespace": "n2de" },
-      { "namespace": "pse" },
-      { "namespace": "rh2" },
-      { "namespace": "sbaa" },
-      { "namespace": "SBQQ" },
-      { "namespace": "SFBD" },
-      { "namespace": "WorkRampApp" }
+      { "namespace": "myManagedPackageNamespace" }
     ]
   },
   "replacements": [
@@ -46,7 +28,7 @@
       "replaceWithFile": "scripts/replacementFiles/fqaBotUser.txt",
       "replaceWhenEnv": [{
         "env": "AUTH_ALIAS",
-        "value": "FQA"
+        "value": "FULLQA"
       }] 
     },
     {
@@ -55,7 +37,7 @@
       "replaceWithFile": "scripts/replacementFiles/prdBotUser.txt",
       "replaceWhenEnv": [{
         "env": "AUTH_ALIAS",
-        "value": "PRD"
+        "value": "PRODUCTION"
       }] 
     }
   ]

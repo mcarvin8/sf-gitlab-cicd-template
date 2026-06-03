@@ -7,7 +7,7 @@
 # Usage: Source this script and call share_slack_update_build function
 # Dependencies: curl
 # Environment Variables Required:
-#   - SLACK_WEBHOOK: Slack webhook URL for posting messages
+#   - SLACK_WEBHOOK_URL: Slack webhook URL for posting messages
 #   - CI_ENVIRONMENT_NAME, CI_JOB_STATUS, CI_JOB_STAGE
 #   - GITLAB_USER_NAME, CI_COMMIT_MESSAGE
 #   - CI_JOB_URL, CI_PROJECT_URL, CI_COMMIT_SHA
@@ -88,7 +88,7 @@ SLACK
 # Function to share Slack update using the webhook URL
 function share_slack_update_build() {
     local slack_webhook
-    slack_webhook="$SLACK_WEBHOOK"
+    slack_webhook="$SLACK_WEBHOOK_URL"
     curl -X POST \
         --data-urlencode "payload=$(print_slack_summary_build)" \
         "${slack_webhook}"
