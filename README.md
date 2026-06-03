@@ -53,15 +53,14 @@ Fork or clone this repository as the starting point for a new SFDX project and y
 
 ## Salesforce CLI Plugins
 
-The model relies on these Salesforce CLI plugins (I authored items 3-5):
+The model relies on these Salesforce CLI plugins (I authored items 2-4):
 
 1. [sfdx-git-delta](https://github.com/scolladon/sfdx-git-delta) - generate incremental `package.xml` / `destructiveChanges.xml` from git diffs
-2. [apex-tests-list](https://github.com/renatoliveira/apex-test-list) - resolve specified Apex tests from annotations
-3. [apex-code-coverage-transformer](https://github.com/mcarvin8/apex-code-coverage-transformer) - convert Salesforce coverage JSON to JaCoCo / Cobertura / lcov
-4. [sf-package-combiner](https://github.com/mcarvin8/sf-package-combiner) - merge multiple `package.xml` files
-5. [sf-package-list](https://github.com/mcarvin8/sf-package-list) - declare metadata in a compact list format and convert to `package.xml`
+2. [apex-code-coverage-transformer](https://github.com/mcarvin8/apex-code-coverage-transformer) - convert Salesforce coverage JSON to JaCoCo / Cobertura / lcov
+3. [sf-package-combiner](https://github.com/mcarvin8/sf-package-combiner) - merge multiple `package.xml` files
+4. [sf-package-list](https://github.com/mcarvin8/sf-package-list) - declare metadata in a compact list format and convert to `package.xml`
 
-All five are pre-installed in the `Dockerfile`.
+All four are pre-installed in the `Dockerfile`. Apex test annotation resolution is handled directly by `package_check.py` rather than a CLI plugin.
 
 ## Getting Started
 

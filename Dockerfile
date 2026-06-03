@@ -24,7 +24,6 @@ RUN apt-get update && apt-get install -y curl jq git python3 && \
     rm -rf /var/lib/apt/lists/* && \
     npm install --global @salesforce/cli@latest && \
     echo y | sf plugins install sfdx-git-delta@latest && \
-    echo y | sf plugins install apex-test-list@latest && \
     echo y | sf plugins install apex-code-coverage-transformer@latest && \
     echo y | sf plugins install sf-package-combiner@latest && \
     echo y | sf plugins install sf-package-list@latest && \
