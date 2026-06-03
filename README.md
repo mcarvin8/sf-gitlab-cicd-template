@@ -164,11 +164,18 @@ The list is converted to XML by `sf-package-list` and merged into the git-delta 
 
 ### Destructive Packages
 
-Destructive packaging differs by pipeline source.
+Two destroy patterns are provided per org. Use one or both depending on team size and process.
 
-**Push pipelines** rely solely on the `sfdx-git-delta` destructive package generated from the git diff.
+**Push pipelines** — `destroy:<org>:push`
 
-**Web pipelines** consume the [sf-package-list](https://github.com/mcarvin8/sf-package-list) format passed via `$PACKAGE`:
+`sfdx-git-delta` detects deleted metadata files in the commit and generates `destructiveChanges.xml` automatically. The destroy job runs as part of the normal push pipeline with no manual intervention.
+
+- Best for small, git-savvy teams where every developer understands that deleting a file triggers a production deletion
+- Risk on larger teams: any developer can accidentally destroy production metadata by deleting a file
+
+**Web pipelines** — `destroy:<org>`
+
+Triggered manually via **Run pipeline** in GitLab with `$PACKAGE` set to an [sf-package-list](https://github.com/mcarvin8/sf-package-list) formatted list of what to delete:
 
 ```
 MetadataType: Member1, Member2, Member3
@@ -176,6 +183,11 @@ MetadataType2: Member1, Member2, Member3
 ```
 
 The pipeline converts the list to `destructiveChanges.xml` before deploying.
+
+- Best for larger teams or orgs where destructive operations need to be intentional and controlled
+- Destruction requires someone to explicitly trigger a pipeline and declare what to delete — no accidental deletes from routine commits
+
+Both jobs are included in each org file. If only one pattern fits your team, remove the other `destroy:*` job from the relevant org file.
 
 ## Declare Specified Apex Tests
 
