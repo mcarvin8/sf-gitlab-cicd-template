@@ -124,10 +124,22 @@ Runs weekly on a scheduled pipeline. For each configured team, the `sf-git-ai-me
 | `CONFLUENCE_TOKEN` | Confluence API token |
 | `CONFLUENCE_PAGE_ID` | ID of the Confluence page to attach summaries to |
 | `CONFLUENCE_BASE_URL` | Confluence base URL, e.g. `https://yourorg.atlassian.net` |
-| `LLM_BASE_URL` | OpenAI-compatible endpoint base URL — passed directly to `sf-git-ai-meta-insights` |
-| `LLM_DEFAULT_HEADERS` | JSON auth headers for your LLM provider, e.g. `{"Authorization":"Bearer <token>"}` — passed directly to the plugin |
+The plugin (`sf-git-ai-meta-insights`) auto-detects the LLM provider from environment variables. Set credentials for whichever provider you use:
 
-Set `METADATA_AUDIT_FAIL_ON_ERROR=1` to make the job exit if any team's plugin invocation errors (default is to warn and continue).
+| Provider | Credential env var(s) | Default model |
+| --- | --- | --- |
+| `openai` | `OPENAI_API_KEY` or `LLM_API_KEY` | `gpt-4o-mini` |
+| `openai-compatible` | `LLM_BASE_URL` (required); `LLM_DEFAULT_HEADERS` (optional) | `gpt-4o-mini` |
+| `anthropic` | `ANTHROPIC_API_KEY` | `claude-3-5-haiku-latest` |
+| `google` | `GOOGLE_GENERATIVE_AI_API_KEY` or `GOOGLE_API_KEY` | `gemini-2.0-flash` |
+| `bedrock` | Standard AWS credential chain (env / profile / role) | `anthropic.claude-3-5-haiku-20241022-v1:0` |
+| `mistral` | `MISTRAL_API_KEY` | `mistral-small-latest` |
+| `cohere` | `COHERE_API_KEY` | `command-r-08-2024` |
+| `groq` | `GROQ_API_KEY` | `llama-3.1-8b-instant` |
+| `xai` | `XAI_API_KEY` | `grok-2-latest` |
+| `deepseek` | `DEEPSEEK_API_KEY` | `deepseek-chat` |
+
+Set `LLM_PROVIDER` to force a specific provider when multiple credentials are present. Set `METADATA_AUDIT_FAIL_ON_ERROR=1` to exit on plugin failure (default: warn and continue).
 
 #### Johnny Agent Promotion (`johnnyPromoteMR`)
 

@@ -32,11 +32,23 @@
 #   - CONFLUENCE_PAGE_ID
 #   - CONFLUENCE_BASE_URL     # e.g. https://yourorg.atlassian.net
 #
-#   # LLM (passed directly to sf-git-ai-meta-insights as standard env vars)
-#   - LLM_BASE_URL            # OpenAI-compatible endpoint base URL
-#   - LLM_DEFAULT_HEADERS     # JSON auth headers, e.g. '{"Authorization":"Bearer <token>"}'
+#   # LLM — set credentials for your chosen provider; the plugin auto-detects from env vars.
+#   #        Set LLM_PROVIDER explicitly to force a specific provider.
+#   #
+#   #  Provider              Credential env var(s)
+#   #  openai                OPENAI_API_KEY or LLM_API_KEY
+#   #  openai-compatible     LLM_BASE_URL (required); LLM_DEFAULT_HEADERS (optional)
+#   #  anthropic             ANTHROPIC_API_KEY
+#   #  google                GOOGLE_GENERATIVE_AI_API_KEY or GOOGLE_API_KEY
+#   #  bedrock               Standard AWS credential chain (env / profile / role)
+#   #  mistral               MISTRAL_API_KEY
+#   #  cohere                COHERE_API_KEY
+#   #  groq                  GROQ_API_KEY
+#   #  xai                   XAI_API_KEY
+#   #  deepseek              DEEPSEEK_API_KEY
 #
 # Optional:
+#   - LLM_PROVIDER                    # force a specific provider (see table above)
 #   - METADATA_AUDIT_FAIL_ON_ERROR=1  # exit if the plugin fails for any team (default: warn and continue)
 #   - METADATA_AUDIT_TO=origin/main   # end ref for summarize (default: origin/main)
 ################################################################################
@@ -50,10 +62,6 @@
 : "${CONFLUENCE_PAGE_ID:?Must set CONFLUENCE_PAGE_ID}"
 : "${CONFLUENCE_BASE_URL:?Must set CONFLUENCE_BASE_URL (e.g. https://yourorg.atlassian.net)}"
 
-: "${LLM_BASE_URL:?Must set LLM_BASE_URL (OpenAI-compatible endpoint base URL)}"
-: "${LLM_DEFAULT_HEADERS:?Must set LLM_DEFAULT_HEADERS (JSON auth headers for your LLM provider)}"
-export LLM_BASE_URL="${LLM_BASE_URL%/}"
-export LLM_DEFAULT_HEADERS
 
 METADATA_AUDIT_TO="${METADATA_AUDIT_TO:-origin/main}"
 
