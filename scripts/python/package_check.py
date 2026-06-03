@@ -335,7 +335,7 @@ def validate_tests(test_set: Set[str]) -> str:
     return " ".join(valid)
 
 
-def determine_destructive_tests() -> str:
+def determine_destructive_tests(deleted_apex: Optional[Set[str]] = None) -> str:
     """Return Apex tests for production destructive deploys from the DESTRUCTIVE_TESTS env var."""
     tests_env = os.environ.get("DESTRUCTIVE_TESTS", "").strip()
     if not tests_env:
@@ -345,6 +345,15 @@ def determine_destructive_tests() -> str:
             "when destroying Apex in production."
         )
         return "not a test"
+    if deleted_apex:
+        declared_tests = set(re.sub(r"[\s,]+", " ", tests_env).split())
+        also_deleted = declared_tests & deleted_apex
+        if also_deleted:
+            logging.warning(
+                "WARNING: The following classes are listed in DESTRUCTIVE_TESTS but are also "
+                "being deleted in this package — they cannot run as tests: %s",
+                ", ".join(sorted(also_deleted)),
+            )
     return tests_env
 
 
@@ -386,7 +395,11 @@ def scan_package(package_path: str, stage: str, env: str, cmt_config_path: str) 
         return validate_tests(test_set)
     if apex_required and stage == "destroy" and (env or "").lower() == "production":
         logging.info("Apex tests required for production destructive deploy.")
-        return determine_destructive_tests()
+        deleted_apex = (
+            set(get_metadata_members_by_type(root, "ApexClass"))
+            | set(get_metadata_members_by_type(root, "ApexTrigger"))
+        )
+        return determine_destructive_tests(deleted_apex)
     logging.info("Apex tests not required.")
     return "not a test"
 
