@@ -4,6 +4,28 @@
 # Set DEV_ORG_URL, SANDBOX_AUTH_URL as CI/CD variables in your project.
 ####################################################
 
+test:unit:dev:
+  extends: .test-unit
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == 'develop'
+      when: always
+    - when: never
+  variables:
+    AUTH_ALIAS: SANDBOX
+    AUTH_URL: $SANDBOX_AUTH_URL
+
+test:postrun:dev:
+  extends: .test-postrun
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == 'develop'
+      when: delayed
+      start_in: 90 minutes
+    - when: never
+  needs: ['test:unit:dev']
+  variables:
+    AUTH_ALIAS: SANDBOX
+    AUTH_URL: $SANDBOX_AUTH_URL
+
 test:predeploy:dev:
   image: $CI_REGISTRY_IMAGE:$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
   extends: .validate-metadata

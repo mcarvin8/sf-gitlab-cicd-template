@@ -4,17 +4,13 @@
 ####################################################
 
 ####################################################
-# Run all local Apex tests on a schedule.
-# Trigger: scheduled pipeline with $JOB_NAME=unitTest.
-# Set $AUTH_URL and $AUTH_ALIAS in CI/CD variables for the target org.
-# Coverage results are passed to SonarQube via test:postrun.
+# Base templates for running all local Apex tests on a schedule.
+# Trigger: scheduled pipeline with $JOB_NAME=unitTest on the org branch.
+# Org-specific jobs in orgs/<org>.yml extend these and supply AUTH_URL,
+# AUTH_ALIAS, branch rule, and needs reference.
 ####################################################
-test:unit:
+.test-unit:
   stage: test
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest'
-      when: always
-    - when: never
   allow_failure: false
   artifacts:
     paths:
@@ -25,14 +21,8 @@ test:unit:
     - sf apex run test --test-level RunLocalTests --result-format human > ./id.txt
     - source ./scripts/bash/extract_test_id.sh
 
-test:postrun:
+.test-postrun:
   stage: test
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest'
-      when: delayed
-      start_in: 90 minutes
-      needs: ['test:unit']
-    - when: never
   allow_failure: false
   artifacts:
     paths:

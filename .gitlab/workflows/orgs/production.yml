@@ -4,6 +4,28 @@
 # Set PRODUCTION_ORG_URL, PRODUCTION_AUTH_URL as CI/CD variables in your project.
 ####################################################
 
+test:unit:prd:
+  extends: .test-unit
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+      when: always
+    - when: never
+  variables:
+    AUTH_ALIAS: PRODUCTION
+    AUTH_URL: $PRODUCTION_AUTH_URL
+
+test:postrun:prd:
+  extends: .test-postrun
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+      when: delayed
+      start_in: 90 minutes
+    - when: never
+  needs: ['test:unit:prd']
+  variables:
+    AUTH_ALIAS: PRODUCTION
+    AUTH_URL: $PRODUCTION_AUTH_URL
+
 test:predeploy:prd:
   extends: .validate-metadata
   stage: test

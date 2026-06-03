@@ -4,6 +4,28 @@
 # Set FULLQA_ORG_URL, FULLQA_AUTH_URL as CI/CD variables in your project.
 ####################################################
 
+test:unit:fullqa:
+  extends: .test-unit
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == 'fullqa'
+      when: always
+    - when: never
+  variables:
+    AUTH_ALIAS: FULLQA
+    AUTH_URL: $FULLQA_AUTH_URL
+
+test:postrun:fullqa:
+  extends: .test-postrun
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == 'fullqa'
+      when: delayed
+      start_in: 90 minutes
+    - when: never
+  needs: ['test:unit:fullqa']
+  variables:
+    AUTH_ALIAS: FULLQA
+    AUTH_URL: $FULLQA_AUTH_URL
+
 test:predeploy:fullqa:
   image: $CI_REGISTRY_IMAGE:$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
   extends: .validate-metadata
