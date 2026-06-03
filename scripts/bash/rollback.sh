@@ -9,7 +9,7 @@
 # Environment Variables Required:
 #   - SHA: Git commit SHA to revert (must be < 3 weeks old)
 #   - CI_COMMIT_BRANCH: Branch to perform rollback on
-#   - MAINTAINER_PAT_NAME, MAINTAINER_PAT_VALUE
+#   - MAINTAINER_PAT_NAME, MAINTAINER_PAT_USER_NAME, MAINTAINER_PAT_VALUE
 #   - GITLAB_USER_NAME
 ################################################################################
 set -e

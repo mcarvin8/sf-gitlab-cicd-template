@@ -12,7 +12,7 @@
 #   - PACKAGE_NAME: XML file name from scripts/packages/ folder
 #   - PREPURGE: Set to "true" to enable pre-purge of metadata folders
 #   - DEPLOY_TIMEOUT: Wait time for retrieval operation
-#   - MAINTAINER_PAT_NAME, MAINTAINER_PAT_VALUE
+#   - MAINTAINER_PAT_NAME, MAINTAINER_PAT_USER_NAME, MAINTAINER_PAT_VALUE
 #   - CI_COMMIT_SHORT_SHA
 # Optional: GIT_REMOTE (default: origin), GIT_PUSH_MAX_ATTEMPTS (default: 5)
 #
