@@ -2,18 +2,22 @@
 ################################################################################
 # Script: refresh_sandbox_branches.sh
 # Description: Performs sandbox refresh operations:
-#              1. Creates backup tags from develop and fullqa branches
-#              2. Deletes develop and fullqa protected branches
-#              3. Clears FULLQA_AUTH_URL and SANDBOX_AUTH_URL CI/CD variables
-#              4. Recreates fullqa branch from main
-#              5. Recreates develop branch from fullqa
-# Usage: 
+#              1. Creates backup tags from DEV_BRANCH and FULLQA_BRANCH branches
+#              2. Deletes DEV_BRANCH and FULLQA_BRANCH protected branches
+#              3. Clears DEV_AUTH_URL_VAR and FULLQA_AUTH_URL_VAR CI/CD variables
+#              4. Recreates FULLQA_BRANCH from CI_DEFAULT_BRANCH
+#              5. Recreates DEV_BRANCH from FULLQA_BRANCH
+# Usage:
 #   ./refresh_sandbox_branches.sh
 # Environment Variables Required:
 #   - MAINTAINER_PAT_NAME, MAINTAINER_PAT_USER_NAME, MAINTAINER_PAT_VALUE: GitLab personal access token with api scope
 #   - CI_PROJECT_ID: GitLab project ID (or will be derived from CI_PROJECT_PATH)
 #   - CI_PROJECT_PATH: Project path (e.g., group/project)
 #   - CI_SERVER_HOST: GitLab server hostname
+#   - CI_COMMIT_SHORT_SHA: used when cleaning up local branches after recreation
+# Configurable (with defaults):
+#   DEV_BRANCH (develop), FULLQA_BRANCH (fullqa)
+#   DEV_AUTH_URL_VAR (SANDBOX_AUTH_URL), FULLQA_AUTH_URL_VAR (FULLQA_AUTH_URL)
 ################################################################################
 
 set -e
@@ -52,6 +56,12 @@ check_required_var "MAINTAINER_PAT_VALUE"
 check_required_var "MAINTAINER_PAT_NAME"
 check_required_var "MAINTAINER_PAT_USER_NAME"
 check_required_var "CI_SERVER_HOST"
+
+# Configurable branch and CI/CD variable names
+DEV_BRANCH="${DEV_BRANCH:-develop}"
+FULLQA_BRANCH="${FULLQA_BRANCH:-fullqa}"
+DEV_AUTH_URL_VAR="${DEV_AUTH_URL_VAR:-SANDBOX_AUTH_URL}"
+FULLQA_AUTH_URL_VAR="${FULLQA_AUTH_URL_VAR:-FULLQA_AUTH_URL}"
 
 # Determine project ID and ensure CI_PROJECT_PATH is set (needed for git operations)
 if [[ -z "$CI_PROJECT_ID" ]]; then
@@ -403,18 +413,18 @@ print_info "Using date string for tags: $DATE_STRING"
 # Step 1: Create tags from develop and fullqa branches
 print_info "=== Step 1: Creating backup tags ==="
 
-# Create tag from develop branch using branch name as ref
-if git ls-remote --exit-code --heads origin "develop" > /dev/null 2>&1; then
-    create_tag "develop" "DevBackup${DATE_STRING}" "develop"
+# Create tag from DEV_BRANCH using branch name as ref
+if git ls-remote --exit-code --heads origin "$DEV_BRANCH" > /dev/null 2>&1; then
+    create_tag "$DEV_BRANCH" "${DEV_BRANCH}Backup${DATE_STRING}" "$DEV_BRANCH"
 else
-    print_warn "Skipping develop tag creation - branch not found or inaccessible"
+    print_warn "Skipping $DEV_BRANCH tag creation - branch not found or inaccessible"
 fi
 
-# Create tag from fullqa branch using branch name as ref
-if git ls-remote --exit-code --heads origin "fullqa" > /dev/null 2>&1; then
-    create_tag "fullqa" "FullqaBackup${DATE_STRING}" "fullqa"
+# Create tag from FULLQA_BRANCH using branch name as ref
+if git ls-remote --exit-code --heads origin "$FULLQA_BRANCH" > /dev/null 2>&1; then
+    create_tag "$FULLQA_BRANCH" "${FULLQA_BRANCH}Backup${DATE_STRING}" "$FULLQA_BRANCH"
 else
-    print_warn "Skipping fullqa tag creation - branch not found or inaccessible"
+    print_warn "Skipping $FULLQA_BRANCH tag creation - branch not found or inaccessible"
 fi
 
 # Step 2: Delete protected branches (preserving protection rules)
@@ -424,42 +434,42 @@ print_info "=== Step 2: Deleting protected branches ==="
 DEVELOP_PROTECTION_RULES=""
 FULLQA_PROTECTION_RULES=""
 
-delete_branch "develop" "DEVELOP_PROTECTION_RULES"
-delete_branch "fullqa" "FULLQA_PROTECTION_RULES"
+delete_branch "$DEV_BRANCH" "DEVELOP_PROTECTION_RULES"
+delete_branch "$FULLQA_BRANCH" "FULLQA_PROTECTION_RULES"
 
 # Step 3: Clear CI/CD variables
 print_info "=== Step 3: Clearing CI/CD variables ==="
 
-update_variable "FULLQA_AUTH_URL" ""
-update_variable "SANDBOX_AUTH_URL" ""
+update_variable "$FULLQA_AUTH_URL_VAR" ""
+update_variable "$DEV_AUTH_URL_VAR" ""
 
-# Step 4: Recreate fullqa branch from main
-print_info "=== Step 4: Recreating fullqa branch from main ==="
+# Step 4: Recreate FULLQA_BRANCH from CI_DEFAULT_BRANCH
+print_info "=== Step 4: Recreating $FULLQA_BRANCH branch from ${CI_DEFAULT_BRANCH:-main} ==="
 
-recreate_branch "fullqa" "main"
+recreate_branch "$FULLQA_BRANCH" "${CI_DEFAULT_BRANCH:-main}"
 
-# Reapply protection rules to fullqa if we have them
+# Reapply protection rules to FULLQA_BRANCH if we have them
 if [[ -n "$FULLQA_PROTECTION_RULES" ]]; then
-    print_info "Reapplying protection rules to fullqa branch"
-    print_info "Fullqa protection rules length: ${#FULLQA_PROTECTION_RULES} characters"
-    apply_protection_rules "fullqa" "$FULLQA_PROTECTION_RULES"
+    print_info "Reapplying protection rules to $FULLQA_BRANCH branch"
+    print_info "$FULLQA_BRANCH protection rules length: ${#FULLQA_PROTECTION_RULES} characters"
+    apply_protection_rules "$FULLQA_BRANCH" "$FULLQA_PROTECTION_RULES"
 else
-    print_warn "No protection rules to reapply for fullqa branch"
+    print_warn "No protection rules to reapply for $FULLQA_BRANCH branch"
     print_warn "FULLQA_PROTECTION_RULES variable is empty"
 fi
 
-# Step 5: Recreate develop branch from fullqa
-print_info "=== Step 5: Recreating develop branch from fullqa ==="
+# Step 5: Recreate DEV_BRANCH from FULLQA_BRANCH
+print_info "=== Step 5: Recreating $DEV_BRANCH branch from $FULLQA_BRANCH ==="
 
-recreate_branch "develop" "fullqa"
+recreate_branch "$DEV_BRANCH" "$FULLQA_BRANCH"
 
-# Reapply protection rules to develop if we have them
+# Reapply protection rules to DEV_BRANCH if we have them
 if [[ -n "$DEVELOP_PROTECTION_RULES" ]]; then
-    print_info "Reapplying protection rules to develop branch"
-    print_info "Develop protection rules length: ${#DEVELOP_PROTECTION_RULES} characters"
-    apply_protection_rules "develop" "$DEVELOP_PROTECTION_RULES"
+    print_info "Reapplying protection rules to $DEV_BRANCH branch"
+    print_info "$DEV_BRANCH protection rules length: ${#DEVELOP_PROTECTION_RULES} characters"
+    apply_protection_rules "$DEV_BRANCH" "$DEVELOP_PROTECTION_RULES"
 else
-    print_warn "No protection rules to reapply for develop branch"
+    print_warn "No protection rules to reapply for $DEV_BRANCH branch"
     print_warn "DEVELOP_PROTECTION_RULES variable is empty"
 fi
 
