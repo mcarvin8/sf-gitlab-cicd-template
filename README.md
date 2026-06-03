@@ -250,8 +250,25 @@ Leave the variable empty or remove it to disable Slack notifications.
 
 ## Branch Protection
 
-- **Validation MR pipelines** - enable "Pipelines must succeed" in GitLab MR settings to block merges until validate passes.
-- **Protected CI/CD environments** - protect deploy and destroy environments to restrict who can ship. Leave `validate-*` environments open so any contributor can validate.
+**Branches**
+
+Protect each org branch (`develop`, `fullqa`, `main`) in **Settings → Repository → Protected branches**:
+
+- Set "Allowed to merge" to Maintainers (or a custom role) to prevent direct deploys without review
+- Enable "Pipelines must succeed" in **Settings → Merge requests** to block merges until the validate job passes
+
+**CI/CD Environments**
+
+Each org has two classes of environment defined in the pipeline:
+
+| Environment | Jobs | Protect? |
+| --- | --- | --- |
+| `dev`, `fullqa`, `production` | deploy, destroy, unit test | Yes — restrict to Maintainers |
+| `validate-dev`, `validate-fullqa`, `validate-production` | validate (MR only) | No — leave open |
+
+Protect deploy/destroy environments in **Settings → CI/CD → Environments** by setting "Protected" and restricting access to Maintainers or a specific group. This ensures only authorised users can trigger real deployments or destructive operations.
+
+`validate-*` environments **must remain unprotected**. Validate jobs run in merge request pipelines as the MR author. If the environment is protected and the author lacks the required role, GitLab blocks the pipeline from running entirely — contributors will be unable to validate their changes before merge.
 
 ## Adapting to Other CI/CD Platforms
 
