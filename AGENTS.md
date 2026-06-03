@@ -1,25 +1,26 @@
-# AGENTS.md (Generalized for Salesforce DX GitLab Repos)
+# AGENTS.md
 
 Orientation file for coding agents (Cursor, Claude Code, Codex, Aider, etc.).  
 This document provides **context and guardrails**, not exhaustive rules.  
-Defer to your tool’s capabilities and developer instructions when appropriate.
+Defer to your tool's capabilities and developer instructions when appropriate.
 
 ---
 
 ## What this repo is
 
-This is a **Salesforce DX (SFDX) metadata repository** deployed via **GitLab CI/CD** across multiple environments.
+A **Salesforce DX (SFDX) metadata repository** deployed via **GitLab CI/CD** across multiple environments using the org branching model.
 
 ### Core characteristics
 
-- **Manifest-driven deployments**
-  - Only metadata explicitly listed in `manifest/package.xml` is deployed
-  - No wildcards allowed
-  - The manifest must be **generated per Merge Request (MR)** and include **only that MR’s delta**
-  - Always **overwrite**, never append or accumulate entries
+- **Delta-driven deployments via sfdx-git-delta**
+  - There is **no committed `manifest/package.xml`**
+  - The CI pipeline generates the deployment package automatically from the git diff at validate and deploy time using `sfdx-git-delta`
+  - To include metadata not captured by the git diff, add a `<Package>` block to the MR description or merge commit message (see below)
+  - No wildcards allowed in any package declaration
 
 - **Apex test selection via annotations**
-  - CI executes only tests referenced in `@tests:` annotations on changed classes
+  - CI executes only tests referenced in `@tests:` annotations on changed classes/triggers
+  - All non-test Apex classes and triggers must have a valid `@tests:` annotation
 
 - **Promotion-based delivery model**
   - The same story branch is promoted across environments via separate MRs
@@ -48,46 +49,38 @@ story branch → develop → fullqa → main
 
 ## Universal hard rules
 
-These apply to all agents and contributors:
-
-1. **No secrets in commits**
-   - Never commit credentials, tokens, keys, or `.env` files
-
-2. **No direct pushes to protected branches**
-   - `develop`, `fullqa`, and `main` are protected
-   - Always use feature branches + MRs
-
-3. **Do not edit profiles**
-   - Profiles are managed outside the repo
-   - Use **Permission Sets** instead
-
-4. **Branch from `main` only**
-   - Do not branch from `develop` or `fullqa`
+1. **No secrets in commits** — never commit credentials, tokens, keys, or `.env` files
+2. **No direct pushes to protected branches** — `develop`, `fullqa`, and `main` require MRs
+3. **Do not edit profiles** — use Permission Sets instead
+4. **Branch from `main` only** — do not branch from `develop` or `fullqa`
 
 ---
 
-## Manifest (`package.xml`) rules
+## Declaring metadata to deploy
 
-This is the **most common failure point**.
+The deployment package is **generated automatically** from the git diff. You do not create or edit `manifest/package.xml`.
 
-- Must contain **ONLY metadata changed in the current MR**
-- Must be **fully regenerated each time**
-- Must **not include entries from previous work**
-- Must **not use wildcards**
+### When the git diff is sufficient
 
-### Correct behavior
+If your changes are fully captured by the files you modified, no extra declaration is needed — the pipeline handles it.
 
-- Generate from git diff
-- Overwrite existing file
-- Include only added/modified components
+### When you need extra metadata
 
-### Incorrect behavior
+Add a `<Package>` block to the **MR description** (for validates) or the **merge commit message** (for deploys):
 
-- Appending entries
-- Keeping previous entries
-- Merging manifests across branches
+```
+<Package>
+MetadataType: Member1, Member2
+MetadataType2: Member1
+</Package>
+```
 
-CI will fail if the manifest does not match the actual delta.
+This is merged with the git-delta package by `sf-package-combiner`. Use it for metadata that is not file-tracked or that must be included alongside changed files.
+
+### Destructive changes
+
+- **Push pipelines**: deleting metadata files triggers a destructive deploy automatically via sfdx-git-delta — no action required
+- **Web pipelines**: trigger a pipeline on the org branch with `$PACKAGE` set to sf-package-list format to destroy specific metadata
 
 ---
 
@@ -100,27 +93,15 @@ CI will fail if the manifest does not match the actual delta.
 - Do **not** rebase story branches
 - Do **not** merge target branches into story branches
 
----
-
-### `manifest/package.xml`
-
-- Always take the **story branch version**
-- Do not merge entries
-- Must reflect only current MR changes
-
----
-
 ### `force-app/` metadata
 
 - Resolve **manually and intentionally**
-- Preserve:
-  - Intended story branch changes
-  - Necessary target branch changes
+- Preserve intended story branch changes and any necessary target branch changes
 - Escalate if unclear
 
 ---
 
-## Repository structure (typical)
+## Repository structure
 
 ```
 force-app/main/default/
@@ -134,54 +115,44 @@ force-app/main/default/
   permissionsets/
   profiles/        (read-only)
   customMetadata/
+scripts/
+  bash/            deployment, destroy, rollback, sandbox scripts
+  python/          package_check.py (Apex test resolution, ConnectedApp handling)
+  packages/        pre-made package.xml files for metadata retrieves
+  pmd/             PMD rulesets for static analysis
+.gitlab/
+  workflows/       pipeline YAML (base-templates, core-jobs, orgs/, etc.)
 ```
-
-### Notes
-
-- Profiles are **read-only**
-- Permission Sets control access
-- Custom Metadata often drives business logic and has high impact
 
 ---
 
 ## CI/CD entry points
 
-- `.gitlab-ci.yml` — pipeline definition
-- `manifest/package.xml` — deployment scope
-- `manifest/destructiveChanges.xml` — deletions
-- `scripts/` — deployment and validation logic
+- `.gitlab-ci.yml` — pipeline definition and global variables
+- `.gitlab/workflows/base-templates.yml` — shared job templates
+- `.gitlab/workflows/orgs/<org>.yml` — per-org validate/deploy/destroy jobs
+- `scripts/bash/generate_delta_package.sh` — delta package generation logic
+- `scripts/python/package_check.py` — Apex test annotation resolution, ConnectedApp key stripping
 
 ---
 
-## Toolchain expectations
+## Toolchain
 
-- Salesforce CLI (`sf`)
-- Python (for validation scripts)
-- GitLab CI runners (Docker-based)
+- Salesforce CLI (`sf`) with plugins: sfdx-git-delta, apex-code-coverage-transformer, sf-package-combiner, sf-package-list
+- Python 3 (for `package_check.py` and `count_test_annotations.py`)
+- GitLab CI runners (Docker-based, image defined in `Dockerfile`)
 - Pre-commit hooks (lint + secret scanning)
 
 ---
 
-## Common pitfalls (“sharp edges”)
+## Common pitfalls ("sharp edges")
 
-1. **Manifest errors**
-   - Must match git delta exactly
-   - Most frequent cause of CI failure
-
-2. **Missing `@tests:` annotations**
-   - Results in zero tests running
-
-3. **Profiles edited**
-   - Changes ignored or rejected
-
-4. **Wrong branching strategy**
-   - Leads to conflicts during promotion
-
-5. **Secrets in commits**
-   - Blocked by hooks or CI
-
-6. **Environment-specific values**
-   - Should not be hardcoded (handled at deploy time)
+1. **Missing `@tests:` annotations** — results in zero tests running and a potential CI failure for Apex deployments
+2. **Profiles edited** — changes ignored or rejected; use Permission Sets
+3. **Wrong branching strategy** — branching from `develop`/`fullqa` causes conflicts during promotion
+4. **Secrets in commits** — blocked by hooks or CI
+5. **Environment-specific values hardcoded** — handled at deploy time via sfdx-project.json replacements or CI variables
+6. **ConnectedApp consumerKey left in source** — `package_check.py` strips it automatically; don't re-add it
 
 ---
 
@@ -196,12 +167,10 @@ force-app/main/default/
 - Small refactors with existing coverage
 - Custom labels and translations
 
----
-
 ### Requires human review
 
 - Flows (high blast radius)
-- Custom Metadata changes
+- Custom Metadata changes (may drive business logic via CMT switches)
 - Triggers
 - Destructive changes
 - Managed package metadata
@@ -210,22 +179,14 @@ force-app/main/default/
 
 ## MR review checklist
 
-Agents should ensure:
+Agents should verify:
 
-1. **Manifest correctness**
-   - Only current MR changes included
-
-2. **Apex test annotations present**
-   - All changed classes include `@tests:`
-
-3. **No secrets**
-   - No credentials or sensitive data
-
-4. **No profile edits**
-
-5. **Proper reviewers assigned**
-
-6. **Sandbox validation completed**
+1. **`@tests:` annotations present** on all changed non-test Apex classes and triggers
+2. **No secrets** committed
+3. **No profile edits**
+4. **Proper reviewers assigned**
+5. **Sandbox validation completed** (`test:predeploy:<org>` job passed)
+6. **`<Package>` block in MR description** if extra metadata beyond the git diff is needed
 
 ---
 
@@ -240,7 +201,7 @@ Agents should ensure:
 
 ## General Salesforce guidance
 
-- Prefer **declarative solutions (OOB)** over code
+- Prefer **declarative solutions** over code
 - Follow naming conventions for metadata
 - Use **Permission Sets**, not profiles
 - Avoid hardcoding IDs or environment-specific values
@@ -249,20 +210,9 @@ Agents should ensure:
 
 ## Working principles for agents
 
-- Treat `package.xml` as **ephemeral**
-- Always generate it from the current diff
-- Prioritize **safe, minimal changes**
+- The deployment package is **auto-generated** — never create or edit `manifest/package.xml`
+- Prioritize **safe, minimal changes** — only touch metadata relevant to the task
 - Avoid modifying unrelated metadata
+- Add `@tests:` annotations to every non-test Apex file you create or modify
 - Escalate when impact is unclear
 - Preserve **promotion integrity across environments**
-
----
-
-## Final note
-
-This file provides **constraints and patterns**, not exhaustive instructions.
-
-Agents should:
-- Follow repository conventions
-- Respect CI/CD validation rules
-- Defer to developer guidance when necessary
