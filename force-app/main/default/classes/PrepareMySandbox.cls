@@ -4,60 +4,83 @@
  * Above annotation complies with https://github.com/renatoliveira/apex-test-list
  ******************************************************************************************************/
 global class PrepareMySandbox implements SandboxPostCopy {
-    // Configure these constants per org before deploying
-    private static final String PUBLIC_GROUP_NAME = 'My Developer Group';
-    private static final String ADMIN_ROLE_NAME = 'Administrator';
-    private static final String NEW_PROFILE_NAME = 'My Sandbox Profile';
-    private static final String PERMISSION_SET_NAME = 'My_Permission_Set';
 
-    global PrepareMySandbox() {
-        // Implementations of SandboxPostCopy must have a no-arg constructor.
-        // This constructor is used during the sandbox copy process.
+    @TestVisible
+    private static Sandbox_Config__mdt config;
+
+    private static Sandbox_Config__mdt getConfig() {
+        if (config == null) {
+            List<Sandbox_Config__mdt> records = [
+                SELECT Public_Group_Name__c, Admin_Role_Name__c, New_Profile_Name__c, Permission_Set_Name__c
+                FROM Sandbox_Config__mdt
+                WHERE DeveloperName = 'Template'
+                LIMIT 1
+            ];
+            config = records.isEmpty() ? null : records[0];
+        }
+        return config;
     }
+
+    global PrepareMySandbox() {}
 
     global void runApexClass(SandboxContext context) {
         System.debug('Org ID: ' + context.organizationId());
         System.debug('Sandbox ID: ' + context.sandboxId());
         System.debug('Sandbox Name: ' + context.sandboxName());
 
-        updateProfilesAndResetPasswordsForPublicGroupMembers();
-        // Additional logic to prepare the sandbox for use can be added here.
+        if (getConfig() == null) {
+            System.debug('PrepareMySandbox: No Sandbox_Config__mdt record found with DeveloperName "Template". Skipping.');
+            return;
+        }
+
+        try {
+            updateProfilesAndResetPasswordsForPublicGroupMembers();
+        } catch (Exception ex) {
+            System.debug('PrepareMySandbox error: ' + ex.getMessage());
+        }
     }
 
     public void updateProfilesAndResetPasswordsForPublicGroupMembers() {
-        Group publicGroup = [SELECT Id FROM Group WHERE Name = :PUBLIC_GROUP_NAME LIMIT 1];
-        Profile newProfile = [SELECT Id FROM Profile WHERE Name = :NEW_PROFILE_NAME LIMIT 1];
-        PermissionSet permSet = [SELECT Id FROM PermissionSet WHERE Name = :PERMISSION_SET_NAME LIMIT 1];
-        UserRole adminRole = [SELECT Id FROM UserRole WHERE Name = :ADMIN_ROLE_NAME LIMIT 1];
+        Sandbox_Config__mdt cfg = getConfig();
 
-        if (publicGroup != null) {
-            List<User> usersToUpdate = getUsersToUpdate(publicGroup, newProfile);
+        List<Group> groups = [SELECT Id FROM Group WHERE Name = :cfg.Public_Group_Name__c LIMIT 1];
+        List<Profile> profiles = [SELECT Id FROM Profile WHERE Name = :cfg.New_Profile_Name__c LIMIT 1];
+        List<PermissionSet> permSets = [SELECT Id FROM PermissionSet WHERE Name = :cfg.Permission_Set_Name__c LIMIT 1];
+        List<UserRole> roles = [SELECT Id FROM UserRole WHERE Name = :cfg.Admin_Role_Name__c LIMIT 1];
 
-            if (!usersToUpdate.isEmpty()) {
-                update usersToUpdate;
-                System.debug('Profile updated for ' + usersToUpdate.size() + ' users.');
+        if (groups.isEmpty()) {
+            System.debug('PrepareMySandbox: Group "' + cfg.Public_Group_Name__c + '" not found.');
+            return;
+        }
+        if (profiles.isEmpty()) {
+            System.debug('PrepareMySandbox: Profile "' + cfg.New_Profile_Name__c + '" not found.');
+            return;
+        }
+        if (permSets.isEmpty()) {
+            System.debug('PrepareMySandbox: PermissionSet "' + cfg.Permission_Set_Name__c + '" not found.');
+            return;
+        }
+        if (roles.isEmpty()) {
+            System.debug('PrepareMySandbox: Role "' + cfg.Admin_Role_Name__c + '" not found.');
+            return;
+        }
 
-                // Assign permission set
-                assignPermSet(usersToUpdate, permSet);
+        List<User> usersToUpdate = getUsersToUpdate(groups[0], profiles[0]);
 
-                // Assign role
-                assignRole(usersToUpdate, adminRole);
-
-                // Reset passwords for updated users
-                resetPasswords(usersToUpdate);
-            } else {
-                System.debug('No eligible active users found in the Public Group.');
-            }
+        if (!usersToUpdate.isEmpty()) {
+            update usersToUpdate;
+            System.debug('Profile updated for ' + usersToUpdate.size() + ' users.');
+            assignPermSet(usersToUpdate, permSets[0]);
+            assignRole(usersToUpdate, roles[0]);
+            resetPasswords(usersToUpdate);
         } else {
-            System.debug('Public Group not found.');
+            System.debug('No eligible active users found in the Public Group.');
         }
     }
 
     private List<User> getUsersToUpdate(Group publicGroup, Profile newProfile) {
         List<User> usersToUpdate = new List<User>();
         Set<Id> userIds = new Set<Id>();
-
-        // Get the current running User's Id
         Id currentUserId = UserInfo.getUserId();
 
         for (GroupMember member : [SELECT UserOrGroupId FROM GroupMember WHERE GroupId = :publicGroup.Id]) {
@@ -67,10 +90,8 @@ global class PrepareMySandbox implements SandboxPostCopy {
             }
         }
 
-        // Query and update active User profiles
         for (User user : [SELECT Id, ProfileId, Email, UserRoleId FROM User WHERE Id IN :userIds AND IsActive = true]) {
             user.ProfileId = newProfile.Id;
-            // Remove .invalid from email address
             if (user.Email != null && user.Email.contains('.invalid')) {
                 user.Email = user.Email.replace('.invalid', '');
             }
@@ -84,7 +105,6 @@ global class PrepareMySandbox implements SandboxPostCopy {
         for (User user : users) {
             user.UserRoleId = adminRole.Id;
         }
-
         try {
             update users;
             System.debug('Role assigned to ' + users.size() + ' users.');
@@ -95,31 +115,28 @@ global class PrepareMySandbox implements SandboxPostCopy {
 
     private void resetPasswords(List<User> users) {
         for (User u : users) {
-            System.resetPassword(u.Id, true); // The second parameter generates a new password and sends an email
+            System.resetPassword(u.Id, true);
         }
         System.debug('Passwords reset for ' + users.size() + ' users.');
     }
 
     private void assignPermSet(List<User> users, PermissionSet permSet) {
-        // Gather user IDs
         Set<Id> userIds = new Set<Id>();
         for (User u : users) {
             userIds.add(u.Id);
         }
-    
-        // Query existing assignments
+
         List<PermissionSetAssignment> existingAssignments = [
-            SELECT AssigneeId 
-            FROM PermissionSetAssignment 
-            WHERE AssigneeId IN :userIds 
+            SELECT AssigneeId
+            FROM PermissionSetAssignment
+            WHERE AssigneeId IN :userIds
             AND PermissionSetId = :permSet.Id
         ];
         Set<Id> alreadyAssignedUserIds = new Set<Id>();
         for (PermissionSetAssignment psa : existingAssignments) {
             alreadyAssignedUserIds.add(psa.AssigneeId);
         }
-    
-        // Prepare new assignments for users without the permission set
+
         List<PermissionSetAssignment> psAssignments = new List<PermissionSetAssignment>();
         for (User u : users) {
             if (!alreadyAssignedUserIds.contains(u.Id)) {
@@ -129,8 +146,7 @@ global class PrepareMySandbox implements SandboxPostCopy {
                 ));
             }
         }
-    
-        // Insert new assignments
+
         if (!psAssignments.isEmpty()) {
             try {
                 insert psAssignments;

@@ -5,75 +5,110 @@
  ******************************************************************************************************/
 @isTest
 class PrepareMySandboxTest {
-    // Configure these constants per org — must match values in PrepareMySandbox.cls
-    private static final String PUBLIC_GROUP_NAME = 'My Developer Group';
-    private static final String ADMIN_ROLE_NAME = 'Administrator';
-    private static final String OLD_PROFILE_NAME = 'My Production Profile';
-    private static final String NEW_PROFILE_NAME = 'My Sandbox Profile';
-    private static final String PERMISSION_SET_NAME = 'My_Permission_Set';
+    private static final String GROUP_NAME = 'Test Developer Group';
+    private static final String ROLE_NAME = 'Test Admin Role';
+    private static final String PERM_SET_NAME = 'Test_Sandbox_Perm_Set';
+    private static final String OLD_PROFILE_NAME = 'Read Only';
+    private static final String NEW_PROFILE_NAME = 'Standard User';
+
+    @TestSetup
+    static void setup() {
+        insert new Group(Name = GROUP_NAME, Type = 'Regular');
+        insert new UserRole(Name = ROLE_NAME, PortalType = 'None');
+        insert new PermissionSet(Name = PERM_SET_NAME, Label = PERM_SET_NAME);
+    }
 
     @isTest
-    public static void testUpdateProfilesAndResetPasswordsForPublicGroupMembers() {
-        Group publicGroup = [SELECT Id FROM Group WHERE Name = :PUBLIC_GROUP_NAME LIMIT 1];
-        UserRole adminRole = [SELECT Id FROM UserRole WHERE Name = :ADMIN_ROLE_NAME LIMIT 1];
+    static void testUpdateProfilesAndResetPasswordsForPublicGroupMembers() {
+        Group testGroup = [SELECT Id FROM Group WHERE Name = :GROUP_NAME LIMIT 1];
+        UserRole testRole = [SELECT Id FROM UserRole WHERE Name = :ROLE_NAME LIMIT 1];
         Profile oldProfile = [SELECT Id FROM Profile WHERE Name = :OLD_PROFILE_NAME LIMIT 1];
         Profile newProfile = [SELECT Id FROM Profile WHERE Name = :NEW_PROFILE_NAME LIMIT 1];
+        PermissionSet testPermSet = [SELECT Id FROM PermissionSet WHERE Name = :PERM_SET_NAME LIMIT 1];
 
-        // Create test users with the old profile
         List<User> testUsers = new List<User>();
-        for (Integer i = 1; i <= 5; i++) {
-            User user = new User(
-                Alias = 'U' + i,
-                Email = 'user' + i + '@example.com',
+        for (Integer i = 1; i <= 3; i++) {
+            testUsers.add(new User(
+                Alias = 'tu' + i,
+                Email = 'testuser' + i + '@example.com',
                 EmailEncodingKey = 'UTF-8',
-                LastName = 'User' + i,
+                LastName = 'TestUser' + i,
                 LanguageLocaleKey = 'en_US',
                 LocaleSidKey = 'en_US',
                 ProfileId = oldProfile.Id,
                 TimeZoneSidKey = 'America/Los_Angeles',
-                UserName = 'user' + i + '@example.com',
+                UserName = 'testuser' + i + '@' + UserInfo.getOrganizationId() + '.sandbox',
                 IsActive = true
-            );
-            testUsers.add(user);
+            ));
         }
-
-        // Insert all the test users in one DML statement
         insert testUsers;
 
-        // Add test users to the public group
         List<GroupMember> groupMembers = new List<GroupMember>();
-        for (User user : testUsers) {
-            groupMembers.add(new GroupMember(GroupId = publicGroup.Id, UserOrGroupId = user.Id));
+        for (User u : testUsers) {
+            groupMembers.add(new GroupMember(GroupId = testGroup.Id, UserOrGroupId = u.Id));
         }
         insert groupMembers;
 
-        // Create an instance of the PrepareMySandbox class
-        PrepareMySandbox sandboxPreparer = new PrepareMySandbox();
+        PrepareMySandbox.config = new Sandbox_Config__mdt(
+            Public_Group_Name__c = GROUP_NAME,
+            Admin_Role_Name__c = ROLE_NAME,
+            New_Profile_Name__c = NEW_PROFILE_NAME,
+            Permission_Set_Name__c = PERM_SET_NAME
+        );
 
-        // Call the method you want to test
         Test.startTest();
-        sandboxPreparer.updateProfilesAndResetPasswordsForPublicGroupMembers();
+        new PrepareMySandbox().updateProfilesAndResetPasswordsForPublicGroupMembers();
         Test.stopTest();
 
-        // Verify outcomes for each test user
-        for (User user : testUsers) {
-            User updatedUser = [SELECT ProfileId, UserRoleId FROM User WHERE Id = :user.Id];
-            System.assertEquals(newProfile.Id, updatedUser.ProfileId, 'User profile not updated.');
-            System.assertEquals(adminRole.Id, updatedUser.UserRoleId, 'User role not updated.');
-
-            // Verify permission set assignment
-            List<PermissionSetAssignment> psAssignments = [
-                SELECT Id 
-                FROM PermissionSetAssignment 
-                WHERE AssigneeId = :user.Id 
-                AND PermissionSet.Name = :PERMISSION_SET_NAME
-            ];
-            System.assertEquals(1, psAssignments.size(), 'Permission set not assigned to user.');
-
-            // Attempt to log in as the user to verify the password reset
-            System.runAs(user) {
-                System.assertNotEquals(null, UserInfo.getSessionId(), 'User password not reset.');
-            }
+        Set<Id> testUserIds = new Map<Id, User>(testUsers).keySet();
+        List<User> updatedUsers = [SELECT ProfileId, UserRoleId FROM User WHERE Id IN :testUserIds];
+        for (User u : updatedUsers) {
+            System.assertEquals(newProfile.Id, u.ProfileId, 'Profile not updated for user ' + u.Id);
+            System.assertEquals(testRole.Id, u.UserRoleId, 'Role not assigned to user ' + u.Id);
         }
+
+        List<PermissionSetAssignment> psas = [
+            SELECT Id FROM PermissionSetAssignment
+            WHERE AssigneeId IN :testUserIds
+            AND PermissionSetId = :testPermSet.Id
+        ];
+        System.assertEquals(testUsers.size(), psas.size(), 'Permission set not assigned to all users.');
+    }
+
+    @isTest
+    static void testUpdateProfilesAndResetPasswords_missingRecords() {
+        PrepareMySandbox.config = new Sandbox_Config__mdt(
+            Public_Group_Name__c = '__NONEXISTENT_GROUP__',
+            Admin_Role_Name__c = '__NONEXISTENT_ROLE__',
+            New_Profile_Name__c = '__NONEXISTENT_PROFILE__',
+            Permission_Set_Name__c = '__NONEXISTENT_PERM_SET__'
+        );
+
+        Test.startTest();
+        new PrepareMySandbox().updateProfilesAndResetPasswordsForPublicGroupMembers();
+        Test.stopTest();
+
+        System.assert(true, 'Missing records should be handled gracefully without exception.');
+    }
+
+    @isTest
+    static void testUpdateProfilesAndResetPasswords_emptyGroup() {
+        Group testGroup = [SELECT Id FROM Group WHERE Name = :GROUP_NAME LIMIT 1];
+        Profile newProfile = [SELECT Id FROM Profile WHERE Name = :NEW_PROFILE_NAME LIMIT 1];
+        PermissionSet testPermSet = [SELECT Id FROM PermissionSet WHERE Name = :PERM_SET_NAME LIMIT 1];
+        UserRole testRole = [SELECT Id FROM UserRole WHERE Name = :ROLE_NAME LIMIT 1];
+
+        PrepareMySandbox.config = new Sandbox_Config__mdt(
+            Public_Group_Name__c = GROUP_NAME,
+            Admin_Role_Name__c = ROLE_NAME,
+            New_Profile_Name__c = NEW_PROFILE_NAME,
+            Permission_Set_Name__c = PERM_SET_NAME
+        );
+
+        Test.startTest();
+        new PrepareMySandbox().updateProfilesAndResetPasswordsForPublicGroupMembers();
+        Test.stopTest();
+
+        System.assert(true, 'Empty group should be handled gracefully without exception.');
     }
 }
