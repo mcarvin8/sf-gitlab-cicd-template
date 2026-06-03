@@ -117,14 +117,14 @@ Validates and tests metadata changes before they merge.
 
 - **Validate** - on a merge request, `sfdx-git-delta` generates an incremental package from `CI_MERGE_REQUEST_DIFF_BASE_SHA` to `HEAD`, merges any `<Package>` extra metadata from the MR description, and validates the combined package against the target org. One validate job per org (in `.gitlab/workflows/orgs/<org>.yml`).
 - **Unit Test** - org-specific jobs (`test:unit:dev`, `test:unit:fullqa`, `test:unit:prd`) defined in each org file run all local Apex tests against that org. Each job is gated to its org branch, so scheduling a pipeline on `develop` with `$JOB_NAME=unitTest` runs tests only against the dev sandbox. Create a separate [scheduled pipeline](https://docs.gitlab.com/ci/pipelines/schedules/) per org branch and set `$JOB_NAME=unitTest` as a pipeline variable.
-- **Code Coverage** - `test:postrun:<org>` runs 90 minutes after `test:unit:<org>`, retrieves results, and uses `apex-code-coverage-transformer` to produce JaCoCo reports rendered natively in GitLab 17+ MR diffs.
+- **Code Coverage** - `test:postrun:<org>` runs 90 minutes after `test:unit:<org>`, retrieves results, and uses `apex-code-coverage-transformer` to produce Cobertura reports rendered natively in GitLab MR diffs.
 
 ### Quality Stage
 
 Three jobs run here:
 
 - **pmd-code-check** - PMD static analysis on changed Apex classes and triggers. Runs on MR pipelines targeting any org branch.
-- **quality** - SonarQube quality gate, consumes JaCoCo coverage from `apex-code-coverage-transformer`. Delete if you don't run Sonar.
+- **quality** - SonarQube quality gate, consumes coverage from `apex-code-coverage-transformer`. Delete if you don't run Sonar or update for a different quality platform.
 - **pre-merge-check** - MR branch compliance verification: branch age, forbidden merges, Jira key in branch name, predeploy job status, and deploy status on lower-env org branches. Posts a summary comment to the MR.
 
 ### Destroy Stage
