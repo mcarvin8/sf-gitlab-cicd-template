@@ -97,11 +97,11 @@ Two jobs run here on merge request pipelines:
 
 ### Maintenance Stage (Optional Ad-Hoc Jobs)
 
-`.gitlab/workflows/maintenance-pipeline.yml` defines opt-in jobs that run only via web-triggered pipelines:
+`.gitlab/workflows/maintenance-pipeline.yml` defines opt-in utility jobs. Jobs trigger via different sources — web pipelines, scheduled pipelines, push events, or merge request events — depending on their purpose:
 
-- **rollback** - roll back a previous deployment using a `$SHA` variable. Creates a revert commit; `sfdx-git-delta` generates the correct delta automatically.
-- **sandboxRefresh** - create or refresh a sandbox via the SF CLI, gated by a tag pattern (`sandbox_v*`).
-- **back-merge from production to sandbox branches** - keep long-running org branches refreshed with changes from `main` without re-triggering CI.
+- **rollback** - roll back a previous deployment using a `$SHA` variable. Triggered via a web pipeline. Creates a revert commit; `sfdx-git-delta` generates the correct delta automatically.
+- **sandboxRefresh** - create or refresh a sandbox via the SF CLI, gated by a tag pattern (`sandbox_v*`). Triggered via a web pipeline.
+- **prodBackfill** - automatically back-promotes commits from the default branch into lower org branches (e.g. `develop`, `fullqa`) on every push to `main`. Runs as part of every production push pipeline so the org branching model stays in sync. Without this, merge commits and other commits that land directly on `main` show up as unmerged changes in GitLab MRs on downstream branches. Allowed to fail so it never blocks a production deploy.
 
 The jobs that perform git operations require a GitLab project access token with the `Maintainer` role and `api` + `write_repository` scopes. Provide it through these variables:
 
