@@ -1,4 +1,4 @@
-# Salesforce DX Project Template
+# Salesforce DX Project Template - Gitlab CI/CD
 
 A batteries-included **Salesforce DX (SFDX) project template** for teams running the **org development model** (long-running branches per org, no scratch orgs or unlocked packages). It is the result of my work building a custom Salesforce CI/CD model on top of the Salesforce CLI (`sf`), a handful of open-source plugins (several of which I authored), and a set of reusable shell/Python helpers.
 
