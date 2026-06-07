@@ -90,10 +90,10 @@ build -> maintenance -> test -> quality -> destroy -> deploy
 
 ### Build Stage
 
-Two jobs run here on merge request pipelines:
+Two jobs run here on different pipeline types:
 
-- **Docker image build** - rebuilds and pushes the runner image when `Dockerfile` or `.dockerignore` changes on an org branch.
-- **validate:package-list** - validates the `<Package>` block in the MR description (if present) using `sf-package-list`, printing the parsed package list to logs. Fails fast before any org is contacted if the format is invalid.
+- **Docker image build** (`build`) - rebuilds and pushes the runner image when `Dockerfile` or `.dockerignore` changes on a direct push to an org branch (`develop`, `fullqa`, `main`). Tags the image with the branch slug; a push to `main` also tags as `production`.
+- **validate:package-list** - runs on MR pipelines targeting org branches. Validates the `<Package>` block in the MR description (if present) using `sf-package-list`, printing the parsed package list to logs. Fails fast before any org is contacted if the format is invalid.
 
 ### Maintenance Stage (Optional Ad-Hoc Jobs)
 
