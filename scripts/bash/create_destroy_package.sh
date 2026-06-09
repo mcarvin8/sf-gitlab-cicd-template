@@ -12,7 +12,7 @@
 ################################################################################
 set -e
 # Create directory if it don't exist
-mkdir -p "destructive"
+mkdir -p "destructiveChanges"
 
 PACKAGE_LIST_FILE="package.txt"
 

@@ -108,8 +108,8 @@
 .delete-metadata:
   extends: .prepare-destroy
   variables:
-    DEPLOY_PACKAGE: "destructive/destructiveChanges.xml"
-    DESTRUCTIVE_PACKAGE: "destructive/package.xml"
+    DEPLOY_PACKAGE: "destructiveChanges/destructiveChanges.xml"
+    DESTRUCTIVE_PACKAGE: "destructiveChanges/package.xml"
   script:
     - source ./scripts/bash/destroy_metadata_sf.sh
   after_script:
