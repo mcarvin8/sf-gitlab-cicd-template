@@ -21,9 +21,9 @@
     - !reference [.authenticate, before_script]
     - source ./scripts/bash/generate_delta_package.sh
     - |
-      for f in force-app/main/default/connectedApps/*.connectedApp-meta.xml; do
-        [ -f "$f" ] && sed -i '/<consumerKey>/d' "$f" && echo "Stripped consumerKey from: $f"
-      done
+      while IFS= read -r f; do
+        sed -i '/<consumerKey>/d' "$f" && echo "Stripped consumerKey from: $f"
+      done < <(find . -path '*/connectedApps/*.connectedApp-meta.xml' -type f)
       testclasses=$(sf apextests list --format sf -x "$DEPLOY_PACKAGE" --no-warnings)
       if [ -z "$testclasses" ] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
         echo "ERROR: Apex found in package but no test annotations found. Add @tests: or @testsuites: annotations."
