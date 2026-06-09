@@ -6,7 +6,7 @@
 #              Runs tests for Apex-related destructive changes in production.
 # Usage: Called from CI/CD pipeline during destroy stage
 # Environment Variables Required:
-#   - testclasses: space-separated test class names from DESTRUCTIVE_TESTS env var, or "not a test" for non-Apex/non-production
+#   - testclasses: space-separated test class names from DESTRUCTIVE_TESTS env var, or "not a test" for non-Apex or non-production
 #   - DEPLOY_PACKAGE: Path to deployment package (pre-destructive changes)
 #   - DESTRUCTIVE_PACKAGE: Path to destructive changes manifest
 #   - DEPLOY_TIMEOUT

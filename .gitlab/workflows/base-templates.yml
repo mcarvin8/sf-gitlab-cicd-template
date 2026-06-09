@@ -28,8 +28,8 @@
         if [ -n "$DESTRUCTIVE_TESTS" ]; then
           testclasses="$DESTRUCTIVE_TESTS"
         else
-          echo "WARNING: DESTRUCTIVE_TESTS is not set — deploying destructive Apex without running tests."
-          testclasses="not a test"
+          echo "ERROR: DESTRUCTIVE_TESTS is not set. Set it to a space-separated list of test classes before destroying Apex in production."
+          exit 1
         fi
       else
         testclasses="not a test"
@@ -112,8 +112,8 @@
         if [ -n "$DESTRUCTIVE_TESTS" ]; then
           testclasses="$DESTRUCTIVE_TESTS"
         else
-          echo "WARNING: DESTRUCTIVE_TESTS is not set — deploying destructive Apex without running tests."
-          testclasses="not a test"
+          echo "ERROR: DESTRUCTIVE_TESTS is not set. Set it to a space-separated list of test classes before destroying Apex in production."
+          exit 1
         fi
       else
         testclasses="not a test"
