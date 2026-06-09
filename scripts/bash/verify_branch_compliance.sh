@@ -22,7 +22,7 @@
 #   PRD_PREDEPLOY_JOB (test:predeploy:prd)
 #   VALID_BRANCH_PREFIXES (unset = skip branch name check)
 #
-# Optional: sf CLI + python3 for sfdx-git-delta manifest generation and package_check.py.
+# Optional: sf CLI for sfdx-git-delta manifest generation and apextests list.
 ################################################################################
 set -euo pipefail
 
@@ -122,13 +122,10 @@ print_status "$YELLOW" "Source commit SHA: $SOURCE_BRANCH_SHA (pipeline-triggere
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
 
 # Package check settings
-PACKAGE_CHECK_STAGE="deploy"  # deploy or destroy
-PACKAGE_CHECK_ENVIRONMENT="production"  # production or sandbox
 PACKAGE_XML_PATH="manifest/package.xml"
-PACKAGE_CHECK_SCRIPT="scripts/python/package_check.py"
 PACKAGE_CHECK_STATUS=""
 PACKAGE_CHECK_OUTPUT=""
-PACKAGE_CHECK_WARNINGS=""
+PACKAGE_LIST_OUTPUT=""
 
 # Function to check how old the source commit is relative to the default branch
 # Returns: "status|age_days|merge_base_sha" format
@@ -563,64 +560,33 @@ if [[ ! -f "$PACKAGE_XML_PATH" ]]; then
     PACKAGE_CHECK_OUTPUT="Package.xml file not found"
 else
     print_status "$YELLOW" "Found package.xml at $PACKAGE_XML_PATH"
-    
-    # Check if package_check.py script exists
-    if [[ ! -f "$PACKAGE_CHECK_SCRIPT" ]]; then
-        print_status "$RED" "✗ Package check script not found at $PACKAGE_CHECK_SCRIPT"
-        PACKAGE_CHECK_STATUS="error"
-        PACKAGE_CHECK_OUTPUT="Package check script not found"
-    else
-        # Check if python3 is available
-        if ! command -v python3 &> /dev/null; then
-            print_status "$RED" "✗ python3 not found in PATH"
-            PACKAGE_CHECK_STATUS="error"
-            PACKAGE_CHECK_OUTPUT="python3 not available"
-        else
-            # Run package_check.py
-            print_status "$YELLOW" "Running package_check.py..."
-            print_status "$YELLOW" "  Manifest: $PACKAGE_XML_PATH"
-            print_status "$YELLOW" "  Stage: $PACKAGE_CHECK_STAGE"
-            print_status "$YELLOW" "  Environment: $PACKAGE_CHECK_ENVIRONMENT"
-            
-            # Capture both stdout and stderr
-            PACKAGE_CHECK_OUTPUT=$(python3 "$PACKAGE_CHECK_SCRIPT" \
-                -x "$PACKAGE_XML_PATH" \
-                -s "$PACKAGE_CHECK_STAGE" \
-                -e "$PACKAGE_CHECK_ENVIRONMENT" 2>&1)
-            PACKAGE_CHECK_EXIT_CODE=$?
-            
-            # Extract warnings from output (especially test annotation warnings)
-            PACKAGE_CHECK_WARNINGS=$(echo "$PACKAGE_CHECK_OUTPUT" | grep -i "WARNING:" || echo "")
-            
-            if [[ $PACKAGE_CHECK_EXIT_CODE -eq 0 ]]; then
-                print_status "$GREEN" "✓ Package.xml compliance check passed"
-                print_status "$YELLOW" "Package check output:"
-                echo "$PACKAGE_CHECK_OUTPUT" | while IFS= read -r line; do
-                    # Highlight warnings in yellow
-                    if echo "$line" | grep -qi "WARNING:"; then
-                        print_status "$YELLOW" "  ⚠ $line"
-                    else
-                        print_status "$YELLOW" "  $line"
-                    fi
-                done
-                
-                # Show warnings separately if present
-                if [[ -n "$PACKAGE_CHECK_WARNINGS" ]]; then
-                    print_status "$YELLOW" "⚠ Package check completed with warnings:"
-                    echo "$PACKAGE_CHECK_WARNINGS" | while IFS= read -r warning; do
-                        print_status "$YELLOW" "  $warning"
-                    done
-                fi
-                PACKAGE_CHECK_STATUS="success"
-            else
-                print_status "$RED" "✗ Package.xml compliance check failed"
-                print_status "$RED" "Package check output:"
-                echo "$PACKAGE_CHECK_OUTPUT" | while IFS= read -r line; do
-                    print_status "$RED" "  $line"
-                done
-                PACKAGE_CHECK_STATUS="failed"
-            fi
+    print_status "$YELLOW" "Running apextests list..."
+    print_status "$YELLOW" "  Manifest: $PACKAGE_XML_PATH"
+
+    PACKAGE_LIST_OUTPUT=$(sf sfpl list -x "$PACKAGE_XML_PATH" 2>/dev/null || echo "")
+    PACKAGE_CHECK_OUTPUT=$(sf apextests list --format sf -x "$PACKAGE_XML_PATH" --no-warnings 2>&1)
+    PACKAGE_CHECK_EXIT_CODE=$?
+
+    if [[ $PACKAGE_CHECK_EXIT_CODE -eq 0 ]]; then
+        print_status "$GREEN" "✓ Package.xml compliance check passed"
+        if [[ -n "$PACKAGE_LIST_OUTPUT" ]]; then
+            print_status "$YELLOW" "  Package contents:"
+            echo "$PACKAGE_LIST_OUTPUT" | while IFS= read -r line; do
+                print_status "$YELLOW" "    $line"
+            done
         fi
+        if [[ -n "$PACKAGE_CHECK_OUTPUT" ]]; then
+            print_status "$YELLOW" "  Tests: $PACKAGE_CHECK_OUTPUT"
+        else
+            print_status "$YELLOW" "  No Apex in package — tests not required"
+        fi
+        PACKAGE_CHECK_STATUS="success"
+    else
+        print_status "$RED" "✗ Package.xml compliance check failed"
+        echo "$PACKAGE_CHECK_OUTPUT" | while IFS= read -r line; do
+            print_status "$RED" "  $line"
+        done
+        PACKAGE_CHECK_STATUS="failed"
     fi
 fi
 
@@ -1270,82 +1236,28 @@ else
 fi
 
 # Package.xml compliance check
+# PACKAGE_CHECK_OUTPUT is "--tests Class1 --tests Class2 ..." or empty (no Apex)
 if [[ "$PACKAGE_CHECK_STATUS" == "success" ]]; then
-    # Extract test classes from output (package_check.py prints test classes as last line via print())
-    # Get the last line and trim whitespace
-    TEST_CLASSES=$(echo "$PACKAGE_CHECK_OUTPUT" | tail -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || echo "")
-    
-    # Check if there are warnings (especially test annotation warnings)
-    if [[ -n "$PACKAGE_CHECK_WARNINGS" ]]; then
-        # Count test annotation related warnings
-        TEST_ANNOTATION_WARNINGS=$(echo "$PACKAGE_CHECK_WARNINGS" | grep -i "test annotation\|test class" || echo "")
-        
-        if [[ -n "$TEST_CLASSES" && "$TEST_CLASSES" != "not a test" && "$TEST_CLASSES" != *"ERROR"* && "$TEST_CLASSES" != *"Apex Tests"* ]]; then
-            # Format test classes for display (limit length if too long)
-            if [[ ${#TEST_CLASSES} -gt 100 ]]; then
-                TEST_CLASSES_SHORT="${TEST_CLASSES:0:97}..."
-                COMMENT_BODY+="- :white_check_mark: **Package.xml Compliance**: Check passed (Test classes: \`$TEST_CLASSES_SHORT\`)"$'\n'
-            else
-                COMMENT_BODY+="- :white_check_mark: **Package.xml Compliance**: Check passed (Test classes: \`$TEST_CLASSES\`)"$'\n'
-            fi
+    COMMENT_BODY+="- :white_check_mark: **Package.xml Compliance**: Check passed"$'\n'
+    if [[ -n "$PACKAGE_LIST_OUTPUT" ]]; then
+        COMMENT_BODY+="  - **Deployment package**:"$'\n'
+        while IFS= read -r line; do
+            COMMENT_BODY+="    - \`$line\`"$'\n'
+        done <<< "$PACKAGE_LIST_OUTPUT"
+    fi
+    if [[ -n "$PACKAGE_CHECK_OUTPUT" ]]; then
+        TEST_CLASSES_DISPLAY=$(echo "$PACKAGE_CHECK_OUTPUT" | sed 's/--tests //g' | tr -s ' ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if [[ ${#TEST_CLASSES_DISPLAY} -gt 100 ]]; then
+            TEST_CLASSES_SHORT="${TEST_CLASSES_DISPLAY:0:97}..."
+            COMMENT_BODY+="  - **Test classes**: \`$TEST_CLASSES_SHORT\`"$'\n'
         else
-            COMMENT_BODY+="- :white_check_mark: **Package.xml Compliance**: Check passed"$'\n'
-        fi
-        
-        # Add warnings section - prioritize test annotation warnings
-        if [[ -n "$TEST_ANNOTATION_WARNINGS" ]]; then
-            COMMENT_BODY+="  - :warning: **Test Annotation Warnings**: "$'\n'
-            # Build warnings list using process substitution to avoid subshell issues
-            WARNINGS_LIST=""
-            while IFS= read -r warning; do
-                # Clean up warning message for display (remove "WARNING:" prefix if present)
-                CLEAN_WARNING=$(echo "$warning" | sed 's/^[[:space:]]*WARNING:[[:space:]]*//i' | cut -c1-150)
-                if [[ -n "$CLEAN_WARNING" ]]; then
-                    if [[ -n "$WARNINGS_LIST" ]]; then
-                        WARNINGS_LIST+=$'\n'
-                    fi
-                    WARNINGS_LIST+="    - \`$CLEAN_WARNING\`"
-                fi
-            done <<< "$TEST_ANNOTATION_WARNINGS"
-            COMMENT_BODY+="$WARNINGS_LIST"$'\n'
-        fi
-        
-        # Add other warnings if any
-        OTHER_WARNINGS=$(echo "$PACKAGE_CHECK_WARNINGS" | grep -vi "test annotation\|test class" || echo "")
-        if [[ -n "$OTHER_WARNINGS" ]]; then
-            COMMENT_BODY+="  - :warning: **Other Warnings**: "$'\n'
-            WARNINGS_LIST=""
-            while IFS= read -r warning; do
-                CLEAN_WARNING=$(echo "$warning" | sed 's/^[[:space:]]*WARNING:[[:space:]]*//i' | cut -c1-150)
-                if [[ -n "$CLEAN_WARNING" ]]; then
-                    if [[ -n "$WARNINGS_LIST" ]]; then
-                        WARNINGS_LIST+=$'\n'
-                    fi
-                    WARNINGS_LIST+="    - \`$CLEAN_WARNING\`"
-                fi
-            done <<< "$OTHER_WARNINGS"
-            COMMENT_BODY+="$WARNINGS_LIST"$'\n'
-        fi
-    else
-        # No warnings - standard success message
-        if [[ -n "$TEST_CLASSES" && "$TEST_CLASSES" != "not a test" && "$TEST_CLASSES" != *"ERROR"* && "$TEST_CLASSES" != *"Apex Tests"* ]]; then
-            # Format test classes for display (limit length if too long)
-            if [[ ${#TEST_CLASSES} -gt 100 ]]; then
-                TEST_CLASSES_SHORT="${TEST_CLASSES:0:97}..."
-                COMMENT_BODY+="- :white_check_mark: **Package.xml Compliance**: Check passed (Test classes: \`$TEST_CLASSES_SHORT\`)"$'\n'
-            else
-                COMMENT_BODY+="- :white_check_mark: **Package.xml Compliance**: Check passed (Test classes: \`$TEST_CLASSES\`)"$'\n'
-            fi
-        else
-            COMMENT_BODY+="- :white_check_mark: **Package.xml Compliance**: Check passed"$'\n'
+            COMMENT_BODY+="  - **Test classes**: \`$TEST_CLASSES_DISPLAY\`"$'\n'
         fi
     fi
 elif [[ "$PACKAGE_CHECK_STATUS" == "failed" ]]; then
-    # Extract error message (first error line, limit length)
-    ERROR_MSG=$(echo "$PACKAGE_CHECK_OUTPUT" | grep -i "ERROR" | head -1 | cut -c1-200 || echo "Package.xml compliance check failed")
+    ERROR_MSG=$(echo "$PACKAGE_CHECK_OUTPUT" | head -1 | cut -c1-200 || echo "Package.xml compliance check failed")
     COMMENT_BODY+="- :x: **Package.xml Compliance**: Check failed - $ERROR_MSG"$'\n'
 elif [[ "$PACKAGE_CHECK_STATUS" == "error" ]]; then
-    # Limit error message length for display
     ERROR_DISPLAY=$(echo "$PACKAGE_CHECK_OUTPUT" | cut -c1-200 || echo "$PACKAGE_CHECK_OUTPUT")
     COMMENT_BODY+="- :warning: **Package.xml Compliance**: Could not perform check - $ERROR_DISPLAY"$'\n'
 else
