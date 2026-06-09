@@ -4,40 +4,32 @@
 ####################################################
 
 ####################################################
-# Authenticate to a Salesforce org and prepare the deployment package.
-# For deploy/test stages: generates an incremental package via sfdx-git-delta
-# and merges any extra metadata declared in the <Package> block of $COMMIT_MSG.
-# For web destroy stage: converts $PACKAGE (sf-package-list format) to XML.
+# Authenticate to a Salesforce org.
+# Used as a building block via !reference in prepare-deploy and prepare-destroy.
 ####################################################
 .authenticate:
   before_script:
     - echo $AUTH_URL | sf org login sfdx-url --set-default --alias $AUTH_ALIAS --sfdx-url-stdin
-    - if [ "$CI_JOB_STAGE" == "destroy" ] && [ -n "$PACKAGE" ]; then
-        source ./scripts/bash/create_destroy_package.sh;
-      elif [ "$CI_JOB_STAGE" != "destroy" ]; then
-        source ./scripts/bash/generate_delta_package.sh;
-      fi
+
+####################################################
+# Prepare a deploy/validate job: generate delta package, strip ConnectedApp
+# secrets, and discover test classes via apextestlist annotations.
+# BEFORE_SHA and COMMIT_MSG must be set by the extending job.
+####################################################
+.prepare-deploy:
+  before_script:
+    - !reference [.authenticate, before_script]
+    - source ./scripts/bash/generate_delta_package.sh
     - |
-      if [ "$CI_JOB_STAGE" != "destroy" ]; then
-        for f in force-app/main/default/connectedApps/*.connectedApp-meta.xml; do
-          [ -f "$f" ] && sed -i '/<consumerKey>/d' "$f" && echo "Stripped consumerKey from: $f"
-        done
-        testclasses=$(sf apextests list --format sf -x "$DEPLOY_PACKAGE" --no-warnings)
-        if [ -z "$testclasses" ] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
-          echo "ERROR: Apex found in package but no test annotations found. Add @tests: or @testsuites: annotations."
-          exit 1
-        fi
-        [ -z "$testclasses" ] && testclasses="not a test"
-      elif [ "$CI_ENVIRONMENT_NAME" == "production" ] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
-        if [ -n "$DESTRUCTIVE_TESTS" ]; then
-          testclasses="$DESTRUCTIVE_TESTS"
-        else
-          echo "ERROR: DESTRUCTIVE_TESTS is not set. Set it to a space-separated list of test classes before destroying Apex in production."
-          exit 1
-        fi
-      else
-        testclasses="not a test"
+      for f in force-app/main/default/connectedApps/*.connectedApp-meta.xml; do
+        [ -f "$f" ] && sed -i '/<consumerKey>/d' "$f" && echo "Stripped consumerKey from: $f"
+      done
+      testclasses=$(sf apextests list --format sf -x "$DEPLOY_PACKAGE" --no-warnings)
+      if [ -z "$testclasses" ] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
+        echo "ERROR: Apex found in package but no test annotations found. Add @tests: or @testsuites: annotations."
+        exit 1
       fi
+      [ -z "$testclasses" ] && testclasses="not a test"
 
 ####################################################
 # Validate metadata against a Salesforce org (MR pipelines).
@@ -45,7 +37,7 @@
 # COMMIT_MSG: MR description (may contain <Package> extra metadata block).
 ####################################################
 .validate-metadata:
-  extends: .authenticate
+  extends: .prepare-deploy
   variables:
     BEFORE_SHA: $CI_MERGE_REQUEST_DIFF_BASE_SHA
     COMMIT_MSG: $CI_MERGE_REQUEST_DESCRIPTION
@@ -81,7 +73,7 @@
 # COMMIT_MSG: merge commit message (may contain <Package> extra metadata block).
 ####################################################
 .deploy-metadata:
-  extends: .authenticate
+  extends: .prepare-deploy
   variables:
     BEFORE_SHA: $CI_COMMIT_BEFORE_SHA
     COMMIT_MSG: $CI_COMMIT_MESSAGE
@@ -91,10 +83,30 @@
     - source ./scripts/bash/deploy_slack_status.sh; share_slack_update_build
 
 ####################################################
+# Prepare a web destroy job: convert $PACKAGE (sf-package-list format) to XML
+# and resolve test classes from DESTRUCTIVE_TESTS for production Apex destroys.
+####################################################
+.prepare-destroy:
+  before_script:
+    - !reference [.authenticate, before_script]
+    - source ./scripts/bash/create_destroy_package.sh
+    - |
+      if [ "$CI_ENVIRONMENT_NAME" == "production" ] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
+        if [ -n "$DESTRUCTIVE_TESTS" ]; then
+          testclasses="$DESTRUCTIVE_TESTS"
+        else
+          echo "ERROR: DESTRUCTIVE_TESTS is not set. Set it to a space-separated list of test classes before destroying Apex in production."
+          exit 1
+        fi
+      else
+        testclasses="not a test"
+      fi
+
+####################################################
 # Delete metadata in a Salesforce org (web pipeline, $PACKAGE provided).
 ####################################################
 .delete-metadata:
-  extends: .authenticate
+  extends: .prepare-destroy
   variables:
     DEPLOY_PACKAGE: "destructive/destructiveChanges.xml"
     DESTRUCTIVE_PACKAGE: "destructive/package.xml"
@@ -109,7 +121,7 @@
 ####################################################
 .delete-metadata-push:
   before_script:
-    - echo $AUTH_URL | sf org login sfdx-url --set-default --alias $AUTH_ALIAS --sfdx-url-stdin
+    - !reference [.authenticate, before_script]
     - sf sgd source delta --from "$CI_COMMIT_BEFORE_SHA" --output-dir .
     - |
       if [ "$CI_ENVIRONMENT_NAME" == "production" ] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
@@ -134,4 +146,3 @@
     - source ./scripts/bash/destroy_metadata_sf.sh
   after_script:
     - source ./scripts/bash/deploy_slack_status.sh; share_slack_update_build
-
