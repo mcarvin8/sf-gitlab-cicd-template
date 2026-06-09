@@ -2,7 +2,7 @@
   "name": "sf-gitlab-cicd-template",
   "private": true,
   "version": "1.0.0",
-  "description": "GitLab CI/CD template for Salesforce — delta metadata deployments, scratch org and sandbox management, PMD and SonarQube static analysis, using the Salesforce CLI and shell scripts.",
+  "description": "GitLab CI/CD template for Salesforce — delta metadata deployments, scratch org and sandbox management, PMD and SonarQube static analysis, using the Salesforce CLI, plugins, and shell scripts.",
   "scripts": {
     "lint": "eslint .",
     "test": "npm run test:unit",
