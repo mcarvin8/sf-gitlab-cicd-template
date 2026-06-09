@@ -22,22 +22,17 @@
         for f in force-app/main/default/connectedApps/*.connectedApp-meta.xml; do
           [ -f "$f" ] && sed -i '/<consumerKey>/d' "$f" && echo "Stripped consumerKey from: $f"
         done
-      fi
-    - |
-      if [ "$CI_JOB_STAGE" == "destroy" ]; then
-        if grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
-          if [ -n "$DESTRUCTIVE_TESTS" ]; then
-            testclasses="$DESTRUCTIVE_TESTS"
-          else
-            echo "WARNING: DESTRUCTIVE_TESTS is not set — deploying destructive Apex without running tests."
-            testclasses="not a test"
-          fi
+        testclasses=$(sf apextests list --format sf -x "$DEPLOY_PACKAGE" --no-warnings)
+        [ -z "$testclasses" ] && testclasses="not a test"
+      elif [ "$CI_ENVIRONMENT_NAME" == "production" ] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
+        if [ -n "$DESTRUCTIVE_TESTS" ]; then
+          testclasses="$DESTRUCTIVE_TESTS"
         else
+          echo "WARNING: DESTRUCTIVE_TESTS is not set — deploying destructive Apex without running tests."
           testclasses="not a test"
         fi
       else
-        testclasses=$(sf apextests list --format sf -x "$DEPLOY_PACKAGE" --no-warnings)
-        [ -z "$testclasses" ] && testclasses="not a test"
+        testclasses="not a test"
       fi
 
 ####################################################
@@ -113,7 +108,7 @@
     - echo $AUTH_URL | sf org login sfdx-url --set-default --alias $AUTH_ALIAS --sfdx-url-stdin
     - sf sgd source delta --from "$CI_COMMIT_BEFORE_SHA" --output-dir .
     - |
-      if grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
+      if [ "$CI_ENVIRONMENT_NAME" == "production" ] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
         if [ -n "$DESTRUCTIVE_TESTS" ]; then
           testclasses="$DESTRUCTIVE_TESTS"
         else
