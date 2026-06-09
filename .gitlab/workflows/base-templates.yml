@@ -17,7 +17,15 @@
       elif [ "$CI_JOB_STAGE" != "destroy" ]; then
         source ./scripts/bash/generate_delta_package.sh;
       fi
-    - testclasses=$(python3 ./scripts/python/package_check.py -x "$DEPLOY_PACKAGE" -s "$CI_JOB_STAGE" -e "$CI_ENVIRONMENT_NAME")
+    - |
+      _pkg_result=$(python3 ./scripts/python/package_check.py -x "$DEPLOY_PACKAGE" -s "$CI_JOB_STAGE" -e "$CI_ENVIRONMENT_NAME")
+      if [ "$_pkg_result" == "not a test" ]; then
+        testclasses="not a test"
+      elif [ "$CI_JOB_STAGE" == "destroy" ]; then
+        testclasses="--tests $_pkg_result"
+      else
+        testclasses=$(sf apextests list --format sf -x "$DEPLOY_PACKAGE")
+      fi
 
 ####################################################
 # Validate metadata against a Salesforce org (MR pipelines).
@@ -92,7 +100,13 @@
   before_script:
     - echo $AUTH_URL | sf org login sfdx-url --set-default --alias $AUTH_ALIAS --sfdx-url-stdin
     - sf sgd source delta --from "$CI_COMMIT_BEFORE_SHA" --output-dir .
-    - testclasses=$(python3 ./scripts/python/package_check.py -x "$DEPLOY_PACKAGE" -s "$CI_JOB_STAGE" -e "$CI_ENVIRONMENT_NAME")
+    - |
+      _pkg_result=$(python3 ./scripts/python/package_check.py -x "$DEPLOY_PACKAGE" -s "$CI_JOB_STAGE" -e "$CI_ENVIRONMENT_NAME")
+      if [ "$_pkg_result" == "not a test" ]; then
+        testclasses="not a test"
+      else
+        testclasses="--tests $_pkg_result"
+      fi
   variables:
     DEPLOY_PACKAGE: "destructiveChanges/destructiveChanges.xml"
     DESTRUCTIVE_PACKAGE: "destructiveChanges/package.xml"
