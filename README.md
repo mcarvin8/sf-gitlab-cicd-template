@@ -59,7 +59,7 @@ The model relies on these Salesforce CLI plugins (I authored items 2-4):
 2. [apex-code-coverage-transformer](https://github.com/mcarvin8/apex-code-coverage-transformer) - convert Salesforce coverage JSON to JaCoCo / Cobertura / lcov
 3. [sf-package-combiner](https://github.com/mcarvin8/sf-package-combiner) - merge multiple `package.xml` files
 4. [sf-package-list](https://github.com/mcarvin8/sf-package-list) - declare metadata in a compact list format and convert to `package.xml`
-5. [apextestlist](https://github.com/wisefoxme/apex-test-list) - resolve Apex test classes from `@tests:` / `@isTest` annotations
+5. [apextestlist](https://github.com/wisefoxme/apex-test-list) - resolve Apex test classes from `@tests:` / `@testsuites:` / `@isTest` annotations
 
 All five are pre-installed in the `Dockerfile`.
 
@@ -285,6 +285,7 @@ Apex tests are required when a deployment includes Apex classes or triggers. The
 Test classes are resolved by the [apextestlist](https://github.com/wisefoxme/apex-test-list) plugin from source annotations. `package_check.py` gates whether tests are required (Apex present check, ConnectedApp secret stripping) before the plugin runs.
 
 - Apex classes and triggers must be annotated with `@tests:` to declare their test classes.
+- Use `@testsuites:` to declare Apex test suites instead of individual test classes.
 - Files marked `@isTest` are automatically treated as their own test class.
 
 ### Destructive Apex Tests
