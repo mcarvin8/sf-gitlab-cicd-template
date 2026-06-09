@@ -55,7 +55,7 @@ Fork or clone this repository as the starting point for a new SFDX project and y
 The model relies on these Salesforce CLI plugins (I authored items 2-4):
 
 1. [sfdx-git-delta](https://github.com/scolladon/sfdx-git-delta) - generate incremental `package.xml` / `destructiveChanges.xml` from git diffs
-2. [apex-code-coverage-transformer](https://github.com/mcarvin8/apex-code-coverage-transformer) - convert Salesforce coverage JSON to JaCoCo / Cobertura / lcov
+2. [apex-code-coverage-transformer](https://github.com/mcarvin8/apex-code-coverage-transformer) - convert Salesforce coverage JSON to other formats supported by GitLab, SonarQube, etc.
 3. [sf-package-combiner](https://github.com/mcarvin8/sf-package-combiner) - merge multiple `package.xml` files
 4. [sf-package-list](https://github.com/mcarvin8/sf-package-list) - declare metadata in a compact list format and convert to `package.xml`
 5. [apextestlist](https://github.com/wisefoxme/apex-test-list) - resolve Apex test classes from `@tests:` / `@testsuites:` / `@isTest` annotations
