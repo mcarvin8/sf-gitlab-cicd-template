@@ -149,7 +149,7 @@ scripts/
 3. **Wrong branching strategy** — branching from `develop`/`fullqa` causes conflicts during promotion
 4. **Secrets in commits** — blocked by hooks or CI
 5. **Environment-specific values hardcoded** — handled at deploy time via sfdx-project.json replacements or CI variables
-6. **ConnectedApp consumerKey left in source** — `package_check.py` strips it automatically; don't re-add it
+6. **ConnectedApp consumerKey left in source** — CI pipeline strips it automatically via `sed`; don't re-add it
 
 ---
 
