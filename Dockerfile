@@ -16,7 +16,7 @@ ENV SF_AUTOUPDATE_DISABLE=true \
     SF_CI_HEARTBEAT_FREQUENCY_MS=60000 \
     NODE_NO_WARNINGS=1
 
-# Install Salesforce CLI and other required software (git, python3, jq, curl, nodejs)
+# Install Salesforce CLI and other required software (git, jq, curl, nodejs)
 # Print Salesforce CLI version in format accepted for Salesforce CLI bugs on GitHub
 RUN apt-get update && apt-get install -y curl jq git && \
     curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
