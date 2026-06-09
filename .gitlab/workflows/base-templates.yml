@@ -22,7 +22,7 @@
       if [ "$_pkg_result" == "not a test" ]; then
         testclasses="not a test"
       elif [ "$CI_JOB_STAGE" == "destroy" ]; then
-        testclasses="--tests $_pkg_result"
+        testclasses="$_pkg_result"
       else
         testclasses=$(sf apextests list --format sf -x "$DEPLOY_PACKAGE")
       fi
@@ -105,7 +105,7 @@
       if [ "$_pkg_result" == "not a test" ]; then
         testclasses="not a test"
       else
-        testclasses="--tests $_pkg_result"
+        testclasses="$_pkg_result"
       fi
   variables:
     DEPLOY_PACKAGE: "destructiveChanges/destructiveChanges.xml"

@@ -7,7 +7,7 @@
 #              environments. Handles both Apex and non-Apex packages.
 # Usage: Called from CI/CD pipeline during deployment stages
 # Environment Variables Required:
-#   - testclasses: Test classes to run (or "not a test" for non-Apex)
+#   - testclasses: "--tests Class1 --tests Class2 ..." from apextestlist, or "not a test" for non-Apex packages
 #   - CI_PIPELINE_SOURCE: Pipeline trigger type (push, merge_request, etc.)
 #   - CI_ENVIRONMENT_NAME: Target environment (production, sandbox, etc.)
 #   - DEPLOY_PACKAGE, DEPLOY_TIMEOUT
@@ -22,7 +22,7 @@ if [ "$testclasses" == "not a test" ]; then
         sf project deploy start -x $DEPLOY_PACKAGE -w $DEPLOY_TIMEOUT --verbose --ignore-conflicts
     fi
 else
-    # Apex package with tests — $testclasses is "--tests Class1 Class2 ..."
+    # Apex package with tests — $testclasses is "--tests Class1 --tests Class2 ..."
     if [ "$CI_PIPELINE_SOURCE" != "push" ]; then
         # Always validate on non-push pipelines
         sf project deploy validate -l RunSpecifiedTests $testclasses \
