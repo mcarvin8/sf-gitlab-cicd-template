@@ -117,7 +117,6 @@ force-app/main/default/
   customMetadata/
 scripts/
   bash/            deployment, destroy, rollback, sandbox scripts
-  python/          package_check.py (Apex test resolution, ConnectedApp handling)
   packages/        pre-made package.xml files for metadata retrieves
   pmd/             PMD rulesets for static analysis
 .gitlab/
@@ -132,14 +131,12 @@ scripts/
 - `.gitlab/workflows/base-templates.yml` — shared job templates
 - `.gitlab/workflows/orgs/<org>.yml` — per-org validate/deploy/destroy jobs
 - `scripts/bash/generate_delta_package.sh` — delta package generation logic
-- `scripts/python/package_check.py` — Apex test annotation resolution, ConnectedApp key stripping
 
 ---
 
 ## Toolchain
 
 - Salesforce CLI (`sf`) with plugins: sfdx-git-delta, apex-code-coverage-transformer, sf-package-combiner, sf-package-list, apextestlist
-- Python 3 (for `count_test_annotations.py` — installed at runtime by the `testAnnotationAudit` maintenance job, not in the default container image)
 - GitLab CI runners (Docker-based, image defined in `Dockerfile`)
 - Pre-commit hooks (lint + secret scanning)
 

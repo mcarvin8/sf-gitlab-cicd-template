@@ -44,7 +44,6 @@ Fork or clone this repository as the starting point for a new SFDX project and y
 | **SFDX project skeleton** | `sfdx-project.json`, `force-app/`, `config/`, `.forceignore`, namespace-ready packaged plugin dependencies |
 | **CI/CD pipeline** | Modular GitLab pipeline split across `.gitlab/workflows/` (base templates, core jobs, test/quality, maintenance, and per-org files under `orgs/`) |
 | **Deployment scripting** | `scripts/bash/` for delta package generation, incremental deploy, destroy, rollback, sandbox refresh, branch back-merge, Slack status posting, etc. |
-| **Python helpers** | `scripts/python/` for the `testAnnotationAudit` maintenance job (`count_test_annotations.py`) — Python installed at runtime, not in the default container |
 | **Reusable manifests** | Pre-made `package.xml` files in `scripts/packages/` (Apex, Automation, Bots, Objects, Security & Access, UI, etc.) for retrieves and targeted deploys |
 | **Static analysis** | PMD rulesets (`scripts/pmd/enforced` + `scripts/pmd/encouraged`) and a SonarQube config (`sonar-project.properties`) |
 | **Quality tooling** | ESLint, Prettier (with Apex + XML plugins), Husky pre-commit hooks, lint-staged, Jest (LWC) |
@@ -342,7 +341,7 @@ Protect deploy/destroy environments in **Settings → CI/CD → Environments** b
 
 ## Adapting to Other CI/CD Platforms
 
-The scripts in `scripts/bash/` and `scripts/python/` are not GitLab-specific - they read from environment variables. Wire up the same variables on another platform (GitHub Actions, Bitbucket Pipelines, Jenkins, Azure DevOps, etc.) and the rest of the model carries over. The plugin set and `Dockerfile` are also platform-agnostic.
+The scripts in `scripts/bash/` are not GitLab-specific - they read from environment variables. Wire up the same variables on another platform (GitHub Actions, Bitbucket Pipelines, Jenkins, Azure DevOps, etc.) and the rest of the model carries over. The plugin set and `Dockerfile` are also platform-agnostic.
 
 ### Pre-defined GitLab CI/CD Variables
 
