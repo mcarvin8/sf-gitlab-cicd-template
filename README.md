@@ -1,10 +1,10 @@
 # Salesforce DX Project Template - Gitlab CI/CD
 
-A batteries-included **Salesforce DX (SFDX) project template** for teams running the **org development model** (long-running branches per org, no scratch orgs or unlocked packages). It is the result of my work building a custom Salesforce CI/CD model on top of the Salesforce CLI (`sf`), a handful of open-source plugins (several of which I authored), and a set of reusable shell/Python helpers.
+A batteries-included **Salesforce DX (SFDX) project template** for teams running the **org development model** (long-running branches per org, no scratch orgs or unlocked packages). It is the result of my work building a custom Salesforce CI/CD model on top of the Salesforce CLI (`sf`), a handful of open-source plugins (several of which I authored), and a set of reusable shell helpers.
 
 Fork or clone this repository as the starting point for a new SFDX project and you get an opinionated, end-to-end CI/CD setup out of the box - GitLab pipelines, incremental deploys via `sfdx-git-delta`, specified Apex test selection, SonarQube quality gates, rollbacks, sandbox refresh automation, Slack notifications, Einstein Bot per-org replacements, and more.
 
-> The pipeline lives under `.gitlab/workflows/` and is wired up in `.gitlab-ci.yml`. The bash, Python, and config that power it all live under `scripts/` and at the repo root. Org-specific values (branch names like `dev`/`fullqa`, environment URLs, runner tags) are configured through CI/CD variables — see [Custom CI/CD Variables](#custom-cicd-variables).
+> The pipeline lives under `.gitlab/workflows/` and is wired up in `.gitlab-ci.yml`. The bash and config that power it all live under `scripts/` and at the repo root. Org-specific values (branch names like `dev`/`fullqa`, environment URLs, runner tags) are configured through CI/CD variables — see [Custom CI/CD Variables](#custom-cicd-variables).
 
 <!-- TABLE OF CONTENTS -->
 <details>
@@ -44,7 +44,7 @@ Fork or clone this repository as the starting point for a new SFDX project and y
 | **SFDX project skeleton** | `sfdx-project.json`, `force-app/`, `config/`, `.forceignore`, namespace-ready packaged plugin dependencies |
 | **CI/CD pipeline** | Modular GitLab pipeline split across `.gitlab/workflows/` (base templates, core jobs, test/quality, maintenance, and per-org files under `orgs/`) |
 | **Deployment scripting** | `scripts/bash/` for delta package generation, incremental deploy, destroy, rollback, sandbox refresh, branch back-merge, Slack status posting, etc. |
-| **Python helpers** | `scripts/python/` for Apex test annotation resolution and package validation (`package_check.py`) |
+| **Python helpers** | `scripts/python/` for the `testAnnotationAudit` maintenance job (`count_test_annotations.py`) — Python installed at runtime, not in the default container |
 | **Reusable manifests** | Pre-made `package.xml` files in `scripts/packages/` (Apex, Automation, Bots, Objects, Security & Access, UI, etc.) for retrieves and targeted deploys |
 | **Static analysis** | PMD rulesets (`scripts/pmd/enforced` + `scripts/pmd/encouraged`) and a SonarQube config (`sonar-project.properties`) |
 | **Quality tooling** | ESLint, Prettier (with Apex + XML plugins), Husky pre-commit hooks, lint-staged, Jest (LWC) |
@@ -192,7 +192,7 @@ Runs on every MR pipeline targeting `main`, `fullqa`, or `develop` (configurable
 | No forbidden merges from lower envs into source | ✓ | ✓ |
 | Source branched from main (not from sandbox) | ✓ | ✓ |
 | Merge conflict trial merge vs target | ✓ | — |
-| `package_check.py` passes on delta package | ✓ | ✓ |
+| Apex tests resolved by apextestlist plugin | ✓ | ✓ |
 | Predeploy validate job passed | ✓ | ✓ |
 | Source SHA merged + deployed to fullqa and develop | ✓ | — |
 | Release branch: per-story deployment verification | ✓ | — |
@@ -282,7 +282,7 @@ Apex tests are required when a deployment includes Apex classes or triggers. The
 
 ### Validation and Deployment Apex Tests
 
-Test classes are resolved by the [apextestlist](https://github.com/wisefoxme/apex-test-list) plugin from source annotations. `package_check.py` gates whether tests are required (Apex present check, ConnectedApp secret stripping) before the plugin runs.
+Test classes are resolved by the [apextestlist](https://github.com/wisefoxme/apex-test-list) plugin from source annotations. The pipeline checks for Apex presence in the package and strips ConnectedApp secrets via shell before invoking the plugin.
 
 - Apex classes and triggers must be annotated with `@tests:` to declare their test classes.
 - Use `@testsuites:` to declare Apex test suites instead of individual test classes.
@@ -296,7 +296,7 @@ Destroying Apex in production requires running Apex tests with the destructive d
 
 ## Connected Apps
 
-When a Connected App is in the deployment package, its `<consumerKey>` element is stripped automatically by `package_check.py` before deploy to avoid Salesforce errors.
+When a Connected App is in the deployment package, its `<consumerKey>` element is stripped automatically before deploy to avoid Salesforce errors. This is handled inline in the pipeline via `sed`.
 
 ## Einstein Bots
 

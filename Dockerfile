@@ -18,7 +18,7 @@ ENV SF_AUTOUPDATE_DISABLE=true \
 
 # Install Salesforce CLI and other required software (git, python3, jq, curl, nodejs)
 # Print Salesforce CLI version in format accepted for Salesforce CLI bugs on GitHub
-RUN apt-get update && apt-get install -y curl jq git python3 && \
+RUN apt-get update && apt-get install -y curl jq git && \
     curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/* && \

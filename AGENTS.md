@@ -138,8 +138,8 @@ scripts/
 
 ## Toolchain
 
-- Salesforce CLI (`sf`) with plugins: sfdx-git-delta, apex-code-coverage-transformer, sf-package-combiner, sf-package-list
-- Python 3 (for `package_check.py` and `count_test_annotations.py`)
+- Salesforce CLI (`sf`) with plugins: sfdx-git-delta, apex-code-coverage-transformer, sf-package-combiner, sf-package-list, apextestlist
+- Python 3 (for `count_test_annotations.py` — installed at runtime by the `testAnnotationAudit` maintenance job, not in the default container image)
 - GitLab CI runners (Docker-based, image defined in `Dockerfile`)
 - Pre-commit hooks (lint + secret scanning)
 

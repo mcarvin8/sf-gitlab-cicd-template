@@ -7,7 +7,7 @@
 #              environments. Handles both Apex and non-Apex packages.
 # Usage: Called from CI/CD pipeline during deployment stages
 # Environment Variables Required:
-#   - testclasses: "--tests Class1 --tests Class2 ..." from apextestlist, or "not a test" for non-Apex packages
+#   - testclasses: "--tests Class1 --tests Class2 ..." from apextestlist (sf format), or "not a test" for non-Apex packages
 #   - CI_PIPELINE_SOURCE: Pipeline trigger type (push, merge_request, etc.)
 #   - CI_ENVIRONMENT_NAME: Target environment (production, sandbox, etc.)
 #   - DEPLOY_PACKAGE, DEPLOY_TIMEOUT

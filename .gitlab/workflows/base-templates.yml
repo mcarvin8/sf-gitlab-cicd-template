@@ -18,13 +18,26 @@
         source ./scripts/bash/generate_delta_package.sh;
       fi
     - |
-      _pkg_result=$(python3 ./scripts/python/package_check.py -x "$DEPLOY_PACKAGE" -s "$CI_JOB_STAGE" -e "$CI_ENVIRONMENT_NAME")
-      if [ "$_pkg_result" == "not a test" ]; then
-        testclasses="not a test"
-      elif [ "$CI_JOB_STAGE" == "destroy" ]; then
-        testclasses="$_pkg_result"
+      if [ "$CI_JOB_STAGE" != "destroy" ]; then
+        for f in force-app/main/default/connectedApps/*.connectedApp-meta.xml; do
+          [ -f "$f" ] && sed -i '/<consumerKey>/d' "$f" && echo "Stripped consumerKey from: $f"
+        done
+      fi
+    - |
+      if [ "$CI_JOB_STAGE" == "destroy" ]; then
+        if grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
+          if [ -n "$DESTRUCTIVE_TESTS" ]; then
+            testclasses="$DESTRUCTIVE_TESTS"
+          else
+            echo "WARNING: DESTRUCTIVE_TESTS is not set — deploying destructive Apex without running tests."
+            testclasses="not a test"
+          fi
+        else
+          testclasses="not a test"
+        fi
       else
-        testclasses=$(sf apextests list --format sf -x "$DEPLOY_PACKAGE")
+        testclasses=$(sf apextests list --format sf -x "$DEPLOY_PACKAGE" --no-warnings)
+        [ -z "$testclasses" ] && testclasses="not a test"
       fi
 
 ####################################################
@@ -93,7 +106,6 @@
 
 ####################################################
 # Destroy metadata via sfdx-git-delta on push pipelines.
-# Runs sgd before package_check.py so the destructiveChanges.xml exists first.
 # allow_failure: true on callers — exits 0 when delta has no destructive types.
 ####################################################
 .delete-metadata-push:
@@ -101,11 +113,15 @@
     - echo $AUTH_URL | sf org login sfdx-url --set-default --alias $AUTH_ALIAS --sfdx-url-stdin
     - sf sgd source delta --from "$CI_COMMIT_BEFORE_SHA" --output-dir .
     - |
-      _pkg_result=$(python3 ./scripts/python/package_check.py -x "$DEPLOY_PACKAGE" -s "$CI_JOB_STAGE" -e "$CI_ENVIRONMENT_NAME")
-      if [ "$_pkg_result" == "not a test" ]; then
-        testclasses="not a test"
+      if grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
+        if [ -n "$DESTRUCTIVE_TESTS" ]; then
+          testclasses="$DESTRUCTIVE_TESTS"
+        else
+          echo "WARNING: DESTRUCTIVE_TESTS is not set — deploying destructive Apex without running tests."
+          testclasses="not a test"
+        fi
       else
-        testclasses="$_pkg_result"
+        testclasses="not a test"
       fi
   variables:
     DEPLOY_PACKAGE: "destructiveChanges/destructiveChanges.xml"
