@@ -290,7 +290,7 @@ Test classes are resolved by the [apextestlist](https://github.com/wisefoxme/ape
 
 ### Destructive Apex Tests
 
-Destroying Apex in production requires running Apex tests with the destructive deployment. Set `DESTRUCTIVE_TESTS` as a CI/CD variable to a space-separated list of test classes to run.
+Destroying Apex in production requires running Apex tests with the destructive deployment. Set `DESTRUCTIVE_TESTS` as a CI/CD variable to a space-separated list of test classes to run. If the variable is not set and the destructive package contains Apex, **the pipeline will fail** rather than fall back to running all local tests (which can take hours on large orgs).
 
 > Sandboxes do not require destructive tests.
 
@@ -366,7 +366,7 @@ The scripts in `scripts/bash/` and `scripts/python/` are not GitLab-specific - t
 | --- | --- |
 | `$DEPLOY_PACKAGE` | path to the combined package generated at runtime (default: `manifest/package.xml`) |
 | `$DEPLOY_TIMEOUT` | `sf` wait time in minutes for deploys/retrieves |
-| `$DESTRUCTIVE_TESTS` | space-separated Apex test classes to run when destroying Apex in production |
+| `$DESTRUCTIVE_TESTS` | space-separated Apex test classes to run when destroying Apex in production — pipeline fails if unset and package contains Apex |
 | `$AUTH_ALIAS` | unique authorization alias per org |
 | `$AUTH_URL` | unique SFDX auth URL per org (`sf org login sfdx-url` value) |
 | `$SLACK_WEBHOOK_URL` | Slack webhook for status posts; leave empty to disable |
