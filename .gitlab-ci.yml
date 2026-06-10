@@ -56,3 +56,5 @@ variables:
   # pre-merge-check fails any branch not containing one of these strings.
   # Leave empty to skip branch name enforcement entirely.
   VALID_BRANCH_PREFIXES: ""
+  # Comma-separated list of protected sandboxes which shouldn't be refreshed via the sandboxRefresh pipeline.
+  DO_NOT_REFRESH: "UAT,QA"
