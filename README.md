@@ -378,4 +378,5 @@ The scripts in `scripts/bash/` are not GitLab-specific - they read from environm
 | `$CONFLUENCE_BASE_URL` | Confluence base URL for `metadataAudit` job (e.g. `https://yourorg.atlassian.net`) |
 | `$MAINTAINER_PAT_NAME` / `$MAINTAINER_PAT_USER_NAME` / `$MAINTAINER_PAT_VALUE` | project access token used by maintenance jobs that push to the repo |
 | `$DO_NOT_REFRESH` | Comma-separated list of protected sandboxes which shouldn't be refreshed via the sandboxRefresh pipeline |
+| `$QUICK_DEPLOY` | Set to `"true"` to use validate-then-quick-deploy for production Apex pushes (faster Apex compilation). Recommended for large orgs. Default: `"false"` (direct deploy with tests). |
 

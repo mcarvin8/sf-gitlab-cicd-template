@@ -58,3 +58,6 @@ variables:
   VALID_BRANCH_PREFIXES: ""
   # Comma-separated list of protected sandboxes which shouldn't be refreshed via the sandboxRefresh pipeline.
   DO_NOT_REFRESH: "UAT,QA"
+  # Set to "true" to use validate-then-quick-deploy for production Apex pushes (faster compilation).
+  # Recommended for large orgs. Defaults to false (direct deploy with tests).
+  QUICK_DEPLOY: "false"

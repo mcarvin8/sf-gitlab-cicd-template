@@ -29,8 +29,8 @@ else
             --coverage-formatters json --results-dir coverage \
             -x $DEPLOY_PACKAGE -w $DEPLOY_TIMEOUT --verbose
     else
-        if [ "$CI_ENVIRONMENT_NAME" == "production" ]; then
-            # Production: validate then quick-deploy
+        if [ "$CI_ENVIRONMENT_NAME" == "production" ] && [ "$QUICK_DEPLOY" == "true" ]; then
+            # Production with QUICK_DEPLOY=true: validate then quick-deploy (faster Apex compilation)
             sf project deploy validate -l RunSpecifiedTests $testclasses \
                 --coverage-formatters json --results-dir coverage \
                 -x $DEPLOY_PACKAGE -w $DEPLOY_TIMEOUT --verbose
