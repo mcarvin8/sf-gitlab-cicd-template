@@ -37,9 +37,10 @@ git config user.email "${MAINTAINER_PAT_USER_NAME}@noreply.${CI_SERVER_HOST}"
 # Function to map metadata types to force-app folder names using metadataRegistry.json
 get_folder_for_metadata_type() {
     local metadata_type=$1
-    local registry_file="scripts/registry/metadataRegistry.json"
+    local registry_file="node_modules/@salesforce/source-deploy-retrieve/lib/src/registry/metadataRegistry.json"
 
     if [[ ! -f "$registry_file" ]]; then
+        echo "Warning: metadataRegistry.json not found at '$registry_file'. Cannot lookup metadata type folder. Skipping pre-purge for '$metadata_type'." >&2
         echo ""
         return
     fi

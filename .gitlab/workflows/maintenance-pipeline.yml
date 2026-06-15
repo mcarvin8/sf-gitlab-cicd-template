@@ -63,6 +63,8 @@ prodBackfill:
       when: always
     - when: never
   allow_failure: false
+  before_script:
+    - npm ci
 
 packageBackfillSbxFullqa:
   extends: .packageBackfillSbxBase
@@ -91,6 +93,7 @@ packageBackfillPrd:
   variables:
     ORG_BRANCH: $CI_DEFAULT_BRANCH
   script:
+    - npm ci
     - echo $PRODUCTION_AUTH_URL | sf org login sfdx-url --set-default --alias main --sfdx-url-stdin
     - source ./scripts/bash/retrieve_packages.sh
 

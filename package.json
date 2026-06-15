@@ -15,6 +15,9 @@
     "prepare": "husky",
     "precommit": "lint-staged"
   },
+  "dependencies": {
+    "@salesforce/source-deploy-retrieve": "^12.36.2"
+  },
   "devDependencies": {
     "@lwc/eslint-plugin-lwc": "^3.5.0",
     "@prettier/plugin-xml": "^3.4.2",
