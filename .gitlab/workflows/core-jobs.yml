@@ -20,6 +20,8 @@ build:
         - Dockerfile
         - .dockerignore
       when: always
+    - if: ($CI_COMMIT_REF_NAME == 'develop' || $CI_COMMIT_REF_NAME == 'fullqa' || $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH) && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'dockerBuild'
+      when: always
   allow_failure: false
   variables:
     IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
