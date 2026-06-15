@@ -93,6 +93,7 @@ build -> maintenance -> test -> quality -> destroy -> deploy
 Two jobs run here on different pipeline types:
 
 - **Docker image build** (`build`) - rebuilds and pushes the runner image when `Dockerfile` or `.dockerignore` changes on a direct push to an org branch (`develop`, `fullqa`, `main`). Tags the image with the branch slug; a push to `main` also tags as `production`.
+    - Optionally, you can define specific GitLab scheduled pipelines to re-build the Docker image on each org branch if you would like to update the Salesforce CLI and plugins to the latest versions on specific schedules. Create a scheduled pipeline for each org branch and set a job variable to `$JOB_NAME=dockerBuild` to trigger scheduled Docker container builds.
 - **validate:package-list** - runs on MR pipelines targeting org branches. Validates the `<Package>` block in the MR description (if present) using `sf-package-list`, printing the parsed package list to logs. Fails fast before any org is contacted if the format is invalid.
 
 ### Maintenance Stage (Optional Ad-Hoc Jobs)
