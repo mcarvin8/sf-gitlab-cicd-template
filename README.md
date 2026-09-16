@@ -22,7 +22,6 @@ Fork or clone this repository as the starting point for a new SFDX project and y
   - [Destroy Stage](#destroy-stage)
   - [Deploy Stage](#deploy-stage)
 - [Declare Metadata to Deploy](#declare-metadata-to-deploy)
-  - [Validations and Deployment Packages](#validations-and-deployment-packages)
   - [Destructive Packages](#destructive-packages)
 - [Declare Specified Apex Tests](#declare-specified-apex-tests)
   - [Validation and Deployment Apex Tests](#validation-and-deployment-apex-tests)
@@ -52,15 +51,14 @@ Fork or clone this repository as the starting point for a new SFDX project and y
 
 ## Salesforce CLI Plugins
 
-The model relies on these Salesforce CLI plugins (I authored items 2-4):
+The model relies on these Salesforce CLI plugins (I authored items 2-3):
 
 1. [sfdx-git-delta](https://github.com/scolladon/sfdx-git-delta) `>= 7.3.0` - generate incremental `package.xml` / `destructiveChanges.xml` from git diffs. `>= 7.3.0` is required for the `--merge-base` flag, which the template uses to diff merge request pipelines from the true merge-base with the target branch.
 2. [apex-code-coverage-transformer](https://github.com/mcarvin8/apex-code-coverage-transformer) - convert Salesforce coverage JSON to other formats supported by GitLab, SonarQube, etc.
-3. [sf-package-combiner](https://github.com/mcarvin8/sf-package-combiner) - merge multiple `package.xml` files
-4. [sf-package-list](https://github.com/mcarvin8/sf-package-list) - declare metadata in a compact list format and convert to `package.xml`
-5. [apextestlist](https://github.com/wisefoxme/apex-test-list) `>= 1.15.0` - resolve Apex test classes from `@tests:` / `@testsuites:` / `@isTest` annotations. `>= 1.15.0` is required for the `-e/--fail-on-empty` flag, which scans the manifest for `ApexClass`/`ApexTrigger` itself instead of the pipeline needing a separate shell check.
+3. [sf-package-list](https://github.com/mcarvin8/sf-package-list) - declare metadata in a compact list format and convert to `package.xml`
+4. [apextestlist](https://github.com/wisefoxme/apex-test-list) `>= 1.15.0` - resolve Apex test classes from `@tests:` / `@testsuites:` / `@isTest` annotations. `>= 1.15.0` is required for the `-e/--fail-on-empty` flag, which scans the manifest for `ApexClass`/`ApexTrigger` itself instead of the pipeline needing a separate shell check.
 
-All five are pre-installed in the `Dockerfile`, pinned to those minimum versions with `@^<version>`.
+All four are pre-installed in the `Dockerfile`, pinned to those minimum versions with `@^<version>`.
 
 ## Getting Started
 
@@ -78,7 +76,7 @@ The pipeline in `.gitlab-ci.yml` follows the **org branching model**: each Sales
 
 Per-org rules are isolated to one YAML file per org under `.gitlab/workflows/orgs/`, so you can customize a branching strategy (one branch per org, MR-to-`main` validates everything, fan-out to multiple orgs, etc.) without touching the shared job templates.
 
-**There is no committed `manifest/package.xml`.** The deployment package is generated on the fly by `sfdx-git-delta` at validate and deploy time. Extra metadata not captured by the git diff can be declared in the MR description or merge commit message using the `<Package>` block format — see [Declare Metadata to Deploy](#declare-metadata-to-deploy).
+**There is no committed deployment package.xml.** The deployment package is generated on the fly by `sfdx-git-delta` at validate and deploy time — whatever the git diff covers is what gets deployed. See [Declare Metadata to Deploy](#declare-metadata-to-deploy).
 
 ## Pipeline Stages
 
@@ -90,11 +88,8 @@ build -> maintenance -> test -> quality -> destroy -> deploy
 
 ### Build Stage
 
-Two jobs run here on different pipeline types:
-
 - **Docker image build** (`build`) - rebuilds and pushes the runner image when `Dockerfile` or `.dockerignore` changes on a direct push to an org branch (`develop`, `fullqa`, `main`). Tags the image with the branch slug; a push to `main` also tags as `production`.
     - Optionally, you can define specific GitLab scheduled pipelines to re-build the Docker image on each org branch if you would like to update the Salesforce CLI and plugins to the latest versions on specific schedules. Create a scheduled pipeline for each org branch and set a job variable to `$JOB_NAME=dockerBuild` to trigger scheduled Docker container builds.
-- **validate:package-list** - runs on MR pipelines targeting org branches. Validates the `<Package>` block in the MR description (if present) using `sf-package-list`, printing the parsed package list to logs. Fails fast before any org is contacted if the format is invalid.
 
 ### Maintenance Stage (Optional Ad-Hoc Jobs)
 
@@ -169,7 +164,7 @@ Remove this job if you are not using an AI triage agent in your workflow.
 
 Validates and tests metadata changes before they merge.
 
-- **Validate** - on a merge request, `sfdx-git-delta` generates an incremental package from the merge-base with the target branch (`--merge-base`) to `HEAD`, merges any `<Package>` extra metadata from the MR description, and validates the combined package against the target org. One validate job per org (in `.gitlab/workflows/orgs/<org>.yml`).
+- **Validate** - on a merge request, `sfdx-git-delta` generates an incremental package from the merge-base with the target branch (`--merge-base`) to `HEAD` and validates it against the target org. One validate job per org (in `.gitlab/workflows/orgs/<org>.yml`).
 - **Unit Test** - org-specific jobs (`test:unit:dev`, `test:unit:fullqa`, `test:unit:prd`) defined in each org file run all local Apex tests against that org. Each job is gated to its org branch, so scheduling a pipeline on `develop` with `$JOB_NAME=unitTest` runs tests only against the dev sandbox. Create a separate [scheduled pipeline](https://docs.gitlab.com/ci/pipelines/schedules/) per org branch and set `$JOB_NAME=unitTest` as a pipeline variable.
 - **Code Coverage** - `test:postrun:<org>` runs 90 minutes after `test:unit:<org>`, retrieves results, and uses `apex-code-coverage-transformer` to produce Cobertura reports rendered natively in GitLab MR diffs.
 
@@ -223,31 +218,11 @@ Removes metadata from the target org. Two flavors are supported:
 
 ### Deploy Stage
 
-Deploys constructive metadata to the target org once an MR merges to the org branch. One deploy job per org. `sfdx-git-delta` generates the incremental package from `CI_COMMIT_BEFORE_SHA` to `HEAD`; any `<Package>` block in the merge commit message is merged in via `sf-package-combiner`. The combined package is printed in list format to job logs via `sf-package-list` before deployment.
+Deploys constructive metadata to the target org once an MR merges to the org branch. One deploy job per org. `sfdx-git-delta` generates the incremental package from `CI_COMMIT_BEFORE_SHA` to `HEAD`, printed in list format via `sf-package-list` before deployment.
 
 ## Declare Metadata to Deploy
 
-**Incremental packages are generated automatically** from the git diff using `sfdx-git-delta` — there is no `manifest/package.xml` to maintain. `sfdx-git-delta` runs at both validate and deploy time: validate pipelines diff from the merge-base with the target branch (`--merge-base`, three-dot semantics), and deploy pipelines diff from `CI_COMMIT_BEFORE_SHA`.
-
-### Validations and Deployment Packages
-
-The git delta covers all metadata files changed in the MR or merge commit. To include additional metadata not captured by the diff, declare it in the **merge request description** (for validates) or **merge commit message** (for deploys) using the [sf-package-list](https://github.com/mcarvin8/sf-package-list) format. The `<Package>` tags are required:
-
-```
-<Package>
-MetadataType: Member1, Member2, Member3
-MetadataType2: Member1, Member2, Member3
-Version: 60.0
-</Package>
-```
-
-The list is converted to XML by `sf-package-list` and merged into the git-delta package by `sf-package-combiner`. The combined package is printed in list format to job logs so you can see exactly what will be deployed. Add `Version: 60.0` to force a specific API version; omit it to fall back to other API-version sources.
-
-**Repo recommendations**
-
-- Update the project's default MR description to include the `<Package>` template.
-
-- Update the merge commit message template to include the MR description (`%{description}`).
+**Packages are generated automatically from the git diff** using `sfdx-git-delta`. Validate pipelines diff from the merge-base with the target branch (`--merge-base`, three-dot semantics); deploy pipelines diff from `CI_COMMIT_BEFORE_SHA`. Whatever the diff covers is what gets deployed.
 
 ### Destructive Packages
 
@@ -357,14 +332,13 @@ The scripts in `scripts/bash/` are not GitLab-specific - they read from environm
 | `$CI_PROJECT_URL` | base URL of the repo (Slack only) |
 | `$CI_MERGE_REQUEST_TARGET_BRANCH_NAME` | target branch for sfdx-git-delta `--merge-base` on validate pipelines |
 | `$CI_COMMIT_BEFORE_SHA` | base SHA for sfdx-git-delta on push (deploy) pipelines |
-| `$CI_MERGE_REQUEST_DESCRIPTION` | MR description; scanned for `<Package>` block on validates |
-| `$CI_COMMIT_MESSAGE` | merge commit message; scanned for `<Package>` block on deploys |
+| `$CI_COMMIT_MESSAGE` | merge commit message (Slack "Triggered by:" parsing; also matched by scheduled metadata-retrieval jobs) |
 
 ### Custom CI/CD Variables
 
 | Variable | Purpose |
 | --- | --- |
-| `$DEPLOY_PACKAGE` | path to the combined package generated at runtime (default: `manifest/package.xml`) |
+| `$DEPLOY_PACKAGE` | path to the deployment package generated at runtime (default: `package/package.xml`) |
 | `$DEPLOY_TIMEOUT` | `sf` wait time in minutes for deploys/retrieves |
 | `$DESTRUCTIVE_TESTS` | space-separated Apex test classes to run when destroying Apex in production — pipeline fails if unset and package contains Apex |
 | `$AUTH_ALIAS` | unique authorization alias per org |

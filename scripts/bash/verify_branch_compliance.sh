@@ -122,8 +122,8 @@ print_status "$YELLOW" "Source commit SHA: $SOURCE_BRANCH_SHA (pipeline-triggere
 # Save current branch/HEAD position for later restoration (needed for package check)
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
 
-# Package check settings
-PACKAGE_XML_PATH="manifest/package.xml"
+# Package check settings (sfdx-git-delta's own output path — see DEPLOY_PACKAGE in .gitlab-ci.yml)
+PACKAGE_XML_PATH="package/package.xml"
 PACKAGE_CHECK_STATUS=""
 PACKAGE_CHECK_OUTPUT=""
 PACKAGE_LIST_OUTPUT=""
@@ -502,14 +502,13 @@ if [[ "$CURRENT_SHA" != "$SOURCE_BRANCH_SHA" ]]; then
 fi
 print_status "$GREEN" "✓ Checked out source branch commit $SOURCE_BRANCH_SHA"
 
-# Generate incremental deployment package from git delta + optional MR description extra metadata.
-# The combined package is written to $PACKAGE_XML_PATH for the compliance package check below.
+# Generate incremental deployment package from git delta.
+# The package is written to $PACKAGE_XML_PATH for the compliance package check below.
 # Uses sfdx-git-delta --merge-base (requires >= 7.3.0) to diff from the true merge-base with the
-# target branch, same as the pipeline's own delta generation (scripts/bash/generate_delta_package.sh) —
+# target branch, same as the pipeline's own delta generation (base-templates.yml .prepare-deploy) —
 # avoids CI_MERGE_REQUEST_DIFF_BASE_SHA, which can go stale after the target branch moves or a rebase/force-push.
 if command -v sf &>/dev/null; then
     rm -rf package destructiveChanges
-    mkdir -p manifest
     print_status "$YELLOW" "Running sf sgd source delta (merge-base with origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME)..."
     set +e
     sgd_out=$(sf sgd source delta --from "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --merge-base --output-dir . 2>&1)
@@ -518,29 +517,8 @@ if command -v sf &>/dev/null; then
     if [[ $sgd_rc -ne 0 ]]; then
         print_status "$YELLOW" "⚠ sfdx-git-delta failed: $(echo "$sgd_out" | tail -c 400)"
     else
-        DELTA_PKG="package/package.xml"
-        EXTRA_LIST="_compliance_extra_package.txt"
-        EXTRA_XML="_compliance_extra_package.xml"
-        HAS_EXTRA=false
-        if echo "${CI_MERGE_REQUEST_DESCRIPTION:-}" | grep -q '<Package>'; then
-            echo "${CI_MERGE_REQUEST_DESCRIPTION}" | sed -n '/<Package>/,/<\/Package>/p' | sed '1d;$d' > "$EXTRA_LIST"
-            if [[ -s "$EXTRA_LIST" ]]; then
-                sf sfpl xml -l "$EXTRA_LIST" -x "$EXTRA_XML" -n 2>/dev/null && HAS_EXTRA=true
-            fi
-        fi
-        DELTA_HAS_TYPES=false
-        grep -q '<types>' "$DELTA_PKG" 2>/dev/null && DELTA_HAS_TYPES=true
-        if [[ "$DELTA_HAS_TYPES" == "true" ]] && [[ "$HAS_EXTRA" == "true" ]]; then
-            sf sfpc combine -f "$DELTA_PKG" -f "$EXTRA_XML" -c "$PACKAGE_XML_PATH" -n
-        elif [[ "$HAS_EXTRA" == "true" ]]; then
-            cp "$EXTRA_XML" "$PACKAGE_XML_PATH"
-        else
-            cp "$DELTA_PKG" "$PACKAGE_XML_PATH"
-        fi
-        rm -f "$EXTRA_LIST" "$EXTRA_XML"
         print_status "$GREEN" "✓ Generated deployment package for compliance check"
     fi
-    rm -rf package destructiveChanges
 else
     print_status "$YELLOW" "⚠ sf CLI not found — skipping package generation"
 fi

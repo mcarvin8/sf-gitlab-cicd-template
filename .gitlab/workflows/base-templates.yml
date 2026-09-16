@@ -12,19 +12,31 @@
     - echo $AUTH_URL | sf org login sfdx-url --set-default --alias $AUTH_ALIAS --sfdx-url-stdin
 
 ####################################################
-# Prepare a deploy/validate job: generate delta package, strip ConnectedApp
-# secrets, and discover test classes via apextestlist annotations.
-# COMMIT_MSG must be set by the extending job. BEFORE_SHA must be set on push
-# pipelines (see .deploy-metadata); MR pipelines derive the delta base from
-# CI_MERGE_REQUEST_TARGET_BRANCH_NAME instead.
-# Requires: apextestlist >= 1.15.0 (adds -e/--fail-on-empty manifest scanning,
-# so the plugin itself fails the job when the manifest has Apex but no
-# resolvable tests, instead of a separate grep against $DEPLOY_PACKAGE).
+# Prepare a deploy/validate job: generate delta package from sfdx-git-delta,
+# strip ConnectedApp secrets, and discover test classes via apextestlist
+# annotations. BEFORE_SHA must be set on push pipelines (see .deploy-metadata).
+# MR pipelines diff via --merge-base against origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+# (three-dot semantics) instead of trusting CI_MERGE_REQUEST_DIFF_BASE_SHA,
+# which can go stale after a rebase/force-push; push pipelines diff straight
+# from BEFORE_SHA since branch history there is already linear. DEPLOY_PACKAGE
+# defaults to sfdx-git-delta's own output path (package/package.xml), so no
+# copy step is needed.
+# Requires: sfdx-git-delta >= 7.3.0 (adds --merge-base), apextestlist >= 1.15.0
+# (adds -e/--fail-on-empty manifest scanning, so the plugin itself fails the
+# job when the manifest has Apex but no resolvable tests).
 ####################################################
 .prepare-deploy:
   before_script:
     - !reference [.authenticate, before_script]
-    - source ./scripts/bash/generate_delta_package.sh
+    - |
+      if [ -n "${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-}" ]; then
+        sf sgd source delta --from "origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}" --merge-base --output-dir .
+      else
+        sf sgd source delta --from "$BEFORE_SHA" --output-dir .
+      fi
+      echo "=== Deployment Package ==="
+      sf sfpl list -x "$DEPLOY_PACKAGE" || true
+      echo "=========================="
     - |
       while IFS= read -r f; do
         sed -i '/<consumerKey>/d' "$f" && echo "Stripped consumerKey from: $f"
@@ -34,15 +46,12 @@
 
 ####################################################
 # Validate metadata against a Salesforce org (MR pipelines).
-# Delta base is the merge-base with the target branch, computed by
-# generate_delta_package.sh via CI_MERGE_REQUEST_TARGET_BRANCH_NAME
-# (sfdx-git-delta --merge-base); no BEFORE_SHA needed here.
-# COMMIT_MSG: MR description (may contain <Package> extra metadata block).
+# Delta base is the merge-base with the target branch, resolved in
+# .prepare-deploy via CI_MERGE_REQUEST_TARGET_BRANCH_NAME; no BEFORE_SHA
+# needed here.
 ####################################################
 .validate-metadata:
   extends: .prepare-deploy
-  variables:
-    COMMIT_MSG: $CI_MERGE_REQUEST_DESCRIPTION
   coverage: '/TOTAL.+ ([0-9]{1,3}(?:\.[0-9]+)?%)/'
   artifacts:
     when: always
@@ -72,13 +81,11 @@
 ####################################################
 # Deploy metadata into a Salesforce org (push pipelines).
 # BEFORE_SHA: SHA immediately before this push (CI_COMMIT_BEFORE_SHA).
-# COMMIT_MSG: merge commit message (may contain <Package> extra metadata block).
 ####################################################
 .deploy-metadata:
   extends: .prepare-deploy
   variables:
     BEFORE_SHA: $CI_COMMIT_BEFORE_SHA
-    COMMIT_MSG: $CI_COMMIT_MESSAGE
   script:
     - source ./scripts/bash/deploy_metadata_sf.sh
   after_script:

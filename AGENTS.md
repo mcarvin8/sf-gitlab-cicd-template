@@ -13,9 +13,9 @@ A **Salesforce DX (SFDX) metadata repository** deployed via **GitLab CI/CD** acr
 ### Core characteristics
 
 - **Delta-driven deployments via sfdx-git-delta**
-  - There is **no committed `manifest/package.xml`**
+  - There is **no committed deployment package.xml**
   - The CI pipeline generates the deployment package automatically from the git diff at validate and deploy time using `sfdx-git-delta`
-  - To include metadata not captured by the git diff, add a `<Package>` block to the MR description or merge commit message (see below)
+  - Metadata not captured by the git diff is not deployed — make sure every file that needs to ship is actually changed in the MR/commit
   - No wildcards allowed in any package declaration
 
 - **Apex test selection via annotations**
@@ -58,24 +58,7 @@ story branch → develop → fullqa → main
 
 ## Declaring metadata to deploy
 
-The deployment package is **generated automatically** from the git diff. You do not create or edit `manifest/package.xml`.
-
-### When the git diff is sufficient
-
-If your changes are fully captured by the files you modified, no extra declaration is needed — the pipeline handles it.
-
-### When you need extra metadata
-
-Add a `<Package>` block to the **MR description** (for validates) or the **merge commit message** (for deploys):
-
-```
-<Package>
-MetadataType: Member1, Member2
-MetadataType2: Member1
-</Package>
-```
-
-This is merged with the git-delta package by `sf-package-combiner`. Use it for metadata that is not file-tracked or that must be included alongside changed files.
+The deployment package is **generated automatically** from the git diff. Whatever files your MR/commit changes is what gets deployed.
 
 ### Destructive changes
 
@@ -130,13 +113,12 @@ scripts/
 - `.gitlab-ci.yml` — pipeline definition and global variables
 - `.gitlab/workflows/base-templates.yml` — shared job templates
 - `.gitlab/workflows/orgs/<org>.yml` — per-org validate/deploy/destroy jobs
-- `scripts/bash/generate_delta_package.sh` — delta package generation logic
 
 ---
 
 ## Toolchain
 
-- Salesforce CLI (`sf`) with plugins: sfdx-git-delta (`>= 7.3.0`, needs `--merge-base`), apex-code-coverage-transformer, sf-package-combiner, sf-package-list, apextestlist (`>= 1.15.0`, needs `--fail-on-empty`)
+- Salesforce CLI (`sf`) with plugins: sfdx-git-delta (`>= 7.3.0`, needs `--merge-base`), apex-code-coverage-transformer, sf-package-list, apextestlist (`>= 1.15.0`, needs `--fail-on-empty`)
 - GitLab CI runners (Docker-based, image defined in `Dockerfile`)
 - Pre-commit hooks (lint + secret scanning)
 
@@ -183,7 +165,6 @@ Agents should verify:
 3. **No profile edits**
 4. **Proper reviewers assigned**
 5. **Sandbox validation completed** (`test:predeploy:<org>` job passed)
-6. **`<Package>` block in MR description** if extra metadata beyond the git diff is needed
 
 ---
 
@@ -207,7 +188,7 @@ Agents should verify:
 
 ## Working principles for agents
 
-- The deployment package is **auto-generated** — never create or edit `manifest/package.xml`
+- The deployment package is **auto-generated** by sfdx-git-delta at CI time — never hand-create or edit it
 - Prioritize **safe, minimal changes** — only touch metadata relevant to the task
 - Avoid modifying unrelated metadata
 - Add `@tests:` annotations to every non-test Apex file you create or modify

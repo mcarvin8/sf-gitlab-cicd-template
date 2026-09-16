@@ -1,6 +1,6 @@
 ####################################################
 # Core Pipeline Jobs
-# Build stage: Docker image build and package-list validation
+# Build stage: Docker image build
 ####################################################
 
 ####################################################
@@ -36,32 +36,3 @@ build:
     - if [ $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH ]; then IMAGE_TAG=$CI_REGISTRY_IMAGE:production; fi
     - docker build --tag $IMAGE_TAG .
     - docker push $IMAGE_TAG
-
-####################################################
-# Validate the <Package> block in the MR description using sf-package-list.
-# Non-blocking advisory check — runs before the validate job touches an org.
-####################################################
-validate:package-list:
-  stage: build
-  cache: []
-  rules:
-    - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'develop' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == $CI_DEFAULT_BRANCH
-      when: never
-    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'develop'
-      when: always
-  allow_failure: false
-  script:
-    - |
-      if echo "$CI_MERGE_REQUEST_DESCRIPTION" | grep -q '<Package>'; then
-        echo "$CI_MERGE_REQUEST_DESCRIPTION" | sed -n '/<Package>/,/<\/Package>/p' | sed '1d;$d' > /tmp/mr_package.txt
-        if [ -s /tmp/mr_package.txt ]; then
-          echo "Validating <Package> block in MR description..."
-          sf sfpl xml -l /tmp/mr_package.txt -x /tmp/mr_package_check.xml -n
-          echo "Package list is valid. Contents:"
-          sf sfpl list -x /tmp/mr_package_check.xml
-        else
-          echo "Empty <Package> block in MR description."
-        fi
-      else
-        echo "No <Package> block in MR description."
-      fi
