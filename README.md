@@ -54,13 +54,13 @@ Fork or clone this repository as the starting point for a new SFDX project and y
 
 The model relies on these Salesforce CLI plugins (I authored items 2-4):
 
-1. [sfdx-git-delta](https://github.com/scolladon/sfdx-git-delta) - generate incremental `package.xml` / `destructiveChanges.xml` from git diffs
+1. [sfdx-git-delta](https://github.com/scolladon/sfdx-git-delta) `>= 7.3.0` - generate incremental `package.xml` / `destructiveChanges.xml` from git diffs. `>= 7.3.0` is required for the `--merge-base` flag, which the template uses to diff merge request pipelines from the true merge-base with the target branch.
 2. [apex-code-coverage-transformer](https://github.com/mcarvin8/apex-code-coverage-transformer) - convert Salesforce coverage JSON to other formats supported by GitLab, SonarQube, etc.
 3. [sf-package-combiner](https://github.com/mcarvin8/sf-package-combiner) - merge multiple `package.xml` files
 4. [sf-package-list](https://github.com/mcarvin8/sf-package-list) - declare metadata in a compact list format and convert to `package.xml`
-5. [apextestlist](https://github.com/wisefoxme/apex-test-list) - resolve Apex test classes from `@tests:` / `@testsuites:` / `@isTest` annotations
+5. [apextestlist](https://github.com/wisefoxme/apex-test-list) `>= 1.15.0` - resolve Apex test classes from `@tests:` / `@testsuites:` / `@isTest` annotations. `>= 1.15.0` is required for the `-e/--fail-on-empty` flag, which scans the manifest for `ApexClass`/`ApexTrigger` itself instead of the pipeline needing a separate shell check.
 
-All five are pre-installed in the `Dockerfile`.
+All five are pre-installed in the `Dockerfile`, pinned to those minimum versions with `@^<version>`.
 
 ## Getting Started
 
@@ -169,7 +169,7 @@ Remove this job if you are not using an AI triage agent in your workflow.
 
 Validates and tests metadata changes before they merge.
 
-- **Validate** - on a merge request, `sfdx-git-delta` generates an incremental package from `CI_MERGE_REQUEST_DIFF_BASE_SHA` to `HEAD`, merges any `<Package>` extra metadata from the MR description, and validates the combined package against the target org. One validate job per org (in `.gitlab/workflows/orgs/<org>.yml`).
+- **Validate** - on a merge request, `sfdx-git-delta` generates an incremental package from the merge-base with the target branch (`--merge-base`) to `HEAD`, merges any `<Package>` extra metadata from the MR description, and validates the combined package against the target org. One validate job per org (in `.gitlab/workflows/orgs/<org>.yml`).
 - **Unit Test** - org-specific jobs (`test:unit:dev`, `test:unit:fullqa`, `test:unit:prd`) defined in each org file run all local Apex tests against that org. Each job is gated to its org branch, so scheduling a pipeline on `develop` with `$JOB_NAME=unitTest` runs tests only against the dev sandbox. Create a separate [scheduled pipeline](https://docs.gitlab.com/ci/pipelines/schedules/) per org branch and set `$JOB_NAME=unitTest` as a pipeline variable.
 - **Code Coverage** - `test:postrun:<org>` runs 90 minutes after `test:unit:<org>`, retrieves results, and uses `apex-code-coverage-transformer` to produce Cobertura reports rendered natively in GitLab MR diffs.
 
@@ -192,7 +192,7 @@ Runs on every MR pipeline targeting `main`, `fullqa`, or `develop` (configurable
 | No forbidden merges from lower envs into source | ✓ | ✓ |
 | Source branched from main (not from sandbox) | ✓ | ✓ |
 | Merge conflict trial merge vs target | ✓ | — |
-| Apex tests resolved by apextestlist plugin | ✓ | ✓ |
+| Apex tests resolved by apextestlist plugin (fails if Apex present with no tests) | ✓ | ✓ |
 | Predeploy validate job passed | ✓ | ✓ |
 | Source SHA merged + deployed to fullqa and develop | ✓ | — |
 | Release branch: per-story deployment verification | ✓ | — |
@@ -227,7 +227,7 @@ Deploys constructive metadata to the target org once an MR merges to the org bra
 
 ## Declare Metadata to Deploy
 
-**Incremental packages are generated automatically** from the git diff using `sfdx-git-delta` — there is no `manifest/package.xml` to maintain. `sfdx-git-delta` runs at both validate and deploy time, diffing against the appropriate base SHA for each pipeline type.
+**Incremental packages are generated automatically** from the git diff using `sfdx-git-delta` — there is no `manifest/package.xml` to maintain. `sfdx-git-delta` runs at both validate and deploy time: validate pipelines diff from the merge-base with the target branch (`--merge-base`, three-dot semantics), and deploy pipelines diff from `CI_COMMIT_BEFORE_SHA`.
 
 ### Validations and Deployment Packages
 
@@ -282,7 +282,7 @@ Apex tests are required when a deployment includes Apex classes or triggers. The
 
 ### Validation and Deployment Apex Tests
 
-Test classes are resolved by the [apextestlist](https://github.com/wisefoxme/apex-test-list) plugin from source annotations. The pipeline checks for Apex presence in the package and strips ConnectedApp secrets via shell before invoking the plugin.
+Test classes are resolved by the [apextestlist](https://github.com/wisefoxme/apex-test-list) plugin (`>= 1.15.0`) from source annotations. The pipeline strips ConnectedApp secrets via shell before invoking the plugin. With `--fail-on-empty`, the plugin itself scans `$DEPLOY_PACKAGE` for `ApexClass`/`ApexTrigger` and fails the job when Apex is present but no tests are resolved — no separate shell check needed.
 
 - Apex classes and triggers must be annotated with `@tests:` to declare their test classes.
 - Use `@testsuites:` to declare Apex test suites instead of individual test classes.
@@ -355,7 +355,7 @@ The scripts in `scripts/bash/` are not GitLab-specific - they read from environm
 | `$GITLAB_USER_NAME` | user who triggered the pipeline (Slack only) |
 | `$CI_JOB_URL` | URL of the CI job log (Slack only) |
 | `$CI_PROJECT_URL` | base URL of the repo (Slack only) |
-| `$CI_MERGE_REQUEST_DIFF_BASE_SHA` | base SHA for sfdx-git-delta on validate pipelines |
+| `$CI_MERGE_REQUEST_TARGET_BRANCH_NAME` | target branch for sfdx-git-delta `--merge-base` on validate pipelines |
 | `$CI_COMMIT_BEFORE_SHA` | base SHA for sfdx-git-delta on push (deploy) pipelines |
 | `$CI_MERGE_REQUEST_DESCRIPTION` | MR description; scanned for `<Package>` block on validates |
 | `$CI_COMMIT_MESSAGE` | merge commit message; scanned for `<Package>` block on deploys |

@@ -136,7 +136,7 @@ scripts/
 
 ## Toolchain
 
-- Salesforce CLI (`sf`) with plugins: sfdx-git-delta, apex-code-coverage-transformer, sf-package-combiner, sf-package-list, apextestlist
+- Salesforce CLI (`sf`) with plugins: sfdx-git-delta (`>= 7.3.0`, needs `--merge-base`), apex-code-coverage-transformer, sf-package-combiner, sf-package-list, apextestlist (`>= 1.15.0`, needs `--fail-on-empty`)
 - GitLab CI runners (Docker-based, image defined in `Dockerfile`)
 - Pre-commit hooks (lint + secret scanning)
 

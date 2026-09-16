@@ -22,7 +22,8 @@
 #   PRD_PREDEPLOY_JOB (test:predeploy:prd)
 #   VALID_BRANCH_PREFIXES (unset = skip branch name check)
 #
-# Optional: sf CLI for sfdx-git-delta manifest generation and apextests list.
+# Optional: sf CLI for sfdx-git-delta (>= 7.3.0, needs --merge-base) manifest
+#           generation and apextestlist (>= 1.15.0, needs --fail-on-empty).
 ################################################################################
 set -euo pipefail
 
@@ -503,54 +504,45 @@ print_status "$GREEN" "✓ Checked out source branch commit $SOURCE_BRANCH_SHA"
 
 # Generate incremental deployment package from git delta + optional MR description extra metadata.
 # The combined package is written to $PACKAGE_XML_PATH for the compliance package check below.
-if [[ -n "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" ]] && command -v sf &>/dev/null; then
-    if ! git cat-file -e "${CI_MERGE_REQUEST_DIFF_BASE_SHA}^{commit}" 2>/dev/null; then
-        print_status "$YELLOW" "Fetching merge-request diff base ${CI_MERGE_REQUEST_DIFF_BASE_SHA:0:8}..."
-        git fetch -q origin "${CI_MERGE_REQUEST_DIFF_BASE_SHA}" 2>/dev/null || true
-    fi
-    if git cat-file -e "${CI_MERGE_REQUEST_DIFF_BASE_SHA}^{commit}" 2>/dev/null; then
-        rm -rf package destructiveChanges
-        mkdir -p manifest
-        print_status "$YELLOW" "Running sf sgd source delta (from diff base to HEAD)..."
-        set +e
-        sgd_out=$(sf sgd source delta --from "$CI_MERGE_REQUEST_DIFF_BASE_SHA" --output-dir . 2>&1)
-        sgd_rc=$?
-        set -e
-        if [[ $sgd_rc -ne 0 ]]; then
-            print_status "$YELLOW" "⚠ sfdx-git-delta failed: $(echo "$sgd_out" | tail -c 400)"
-        else
-            DELTA_PKG="package/package.xml"
-            EXTRA_LIST="_compliance_extra_package.txt"
-            EXTRA_XML="_compliance_extra_package.xml"
-            HAS_EXTRA=false
-            if echo "${CI_MERGE_REQUEST_DESCRIPTION:-}" | grep -q '<Package>'; then
-                echo "${CI_MERGE_REQUEST_DESCRIPTION}" | sed -n '/<Package>/,/<\/Package>/p' | sed '1d;$d' > "$EXTRA_LIST"
-                if [[ -s "$EXTRA_LIST" ]]; then
-                    sf sfpl xml -l "$EXTRA_LIST" -x "$EXTRA_XML" -n 2>/dev/null && HAS_EXTRA=true
-                fi
+# Uses sfdx-git-delta --merge-base (requires >= 7.3.0) to diff from the true merge-base with the
+# target branch, same as the pipeline's own delta generation (scripts/bash/generate_delta_package.sh) —
+# avoids CI_MERGE_REQUEST_DIFF_BASE_SHA, which can go stale after the target branch moves or a rebase/force-push.
+if command -v sf &>/dev/null; then
+    rm -rf package destructiveChanges
+    mkdir -p manifest
+    print_status "$YELLOW" "Running sf sgd source delta (merge-base with origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME)..."
+    set +e
+    sgd_out=$(sf sgd source delta --from "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --merge-base --output-dir . 2>&1)
+    sgd_rc=$?
+    set -e
+    if [[ $sgd_rc -ne 0 ]]; then
+        print_status "$YELLOW" "⚠ sfdx-git-delta failed: $(echo "$sgd_out" | tail -c 400)"
+    else
+        DELTA_PKG="package/package.xml"
+        EXTRA_LIST="_compliance_extra_package.txt"
+        EXTRA_XML="_compliance_extra_package.xml"
+        HAS_EXTRA=false
+        if echo "${CI_MERGE_REQUEST_DESCRIPTION:-}" | grep -q '<Package>'; then
+            echo "${CI_MERGE_REQUEST_DESCRIPTION}" | sed -n '/<Package>/,/<\/Package>/p' | sed '1d;$d' > "$EXTRA_LIST"
+            if [[ -s "$EXTRA_LIST" ]]; then
+                sf sfpl xml -l "$EXTRA_LIST" -x "$EXTRA_XML" -n 2>/dev/null && HAS_EXTRA=true
             fi
-            DELTA_HAS_TYPES=false
-            grep -q '<types>' "$DELTA_PKG" 2>/dev/null && DELTA_HAS_TYPES=true
-            if [[ "$DELTA_HAS_TYPES" == "true" ]] && [[ "$HAS_EXTRA" == "true" ]]; then
-                sf sfpc combine -f "$DELTA_PKG" -f "$EXTRA_XML" -c "$PACKAGE_XML_PATH" -n
-            elif [[ "$HAS_EXTRA" == "true" ]]; then
-                cp "$EXTRA_XML" "$PACKAGE_XML_PATH"
-            else
-                cp "$DELTA_PKG" "$PACKAGE_XML_PATH"
-            fi
-            rm -f "$EXTRA_LIST" "$EXTRA_XML"
-            print_status "$GREEN" "✓ Generated deployment package for compliance check"
         fi
-        rm -rf package destructiveChanges
-    else
-        print_status "$YELLOW" "⚠ Could not resolve CI_MERGE_REQUEST_DIFF_BASE_SHA — skipping package generation"
+        DELTA_HAS_TYPES=false
+        grep -q '<types>' "$DELTA_PKG" 2>/dev/null && DELTA_HAS_TYPES=true
+        if [[ "$DELTA_HAS_TYPES" == "true" ]] && [[ "$HAS_EXTRA" == "true" ]]; then
+            sf sfpc combine -f "$DELTA_PKG" -f "$EXTRA_XML" -c "$PACKAGE_XML_PATH" -n
+        elif [[ "$HAS_EXTRA" == "true" ]]; then
+            cp "$EXTRA_XML" "$PACKAGE_XML_PATH"
+        else
+            cp "$DELTA_PKG" "$PACKAGE_XML_PATH"
+        fi
+        rm -f "$EXTRA_LIST" "$EXTRA_XML"
+        print_status "$GREEN" "✓ Generated deployment package for compliance check"
     fi
+    rm -rf package destructiveChanges
 else
-    if [[ -z "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" ]]; then
-        print_status "$YELLOW" "⚠ CI_MERGE_REQUEST_DIFF_BASE_SHA not set — skipping package generation"
-    else
-        print_status "$YELLOW" "⚠ sf CLI not found — skipping package generation"
-    fi
+    print_status "$YELLOW" "⚠ sf CLI not found — skipping package generation"
 fi
 
 # Check if package.xml exists
@@ -564,8 +556,10 @@ else
     print_status "$YELLOW" "  Manifest: $PACKAGE_XML_PATH"
 
     PACKAGE_LIST_OUTPUT=$(sf sfpl list -x "$PACKAGE_XML_PATH" 2>/dev/null || echo "")
-    PACKAGE_CHECK_OUTPUT=$(sf apextests list --format sf -x "$PACKAGE_XML_PATH" --no-warnings 2>&1)
+    set +e
+    PACKAGE_CHECK_OUTPUT=$(sf apextests list --format sf -x "$PACKAGE_XML_PATH" --no-warnings --fail-on-empty 2>&1)
     PACKAGE_CHECK_EXIT_CODE=$?
+    set -e
 
     if [[ $PACKAGE_CHECK_EXIT_CODE -eq 0 ]]; then
         print_status "$GREEN" "✓ Package.xml compliance check passed"
