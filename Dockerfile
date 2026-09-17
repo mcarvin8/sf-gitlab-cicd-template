@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y curl jq git && \
     curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/* && \
+    npm install --global npm@latest && \
     npm install --global @salesforce/cli@latest && \
     echo y | sf plugins install sfdx-git-delta@^7.3.0 && \
     echo y | sf plugins install apex-code-coverage-transformer@latest && \

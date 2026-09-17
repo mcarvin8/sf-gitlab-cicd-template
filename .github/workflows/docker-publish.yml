@@ -33,10 +33,9 @@ jobs:
             ${{ env.IMAGE_NAME }}:linux
 
   windows:
-    # GitHub-hosted Windows runners only support Linux containers (via WSL2).
-    # Building this Windows Server Core image requires a self-hosted Windows
-    # runner with Docker configured for Windows containers.
-    runs-on: [self-hosted, windows]
+    # windows-latest is Windows Server 2022, matching the ltsc2022 base image
+    # in Dockerfile.windows, so process-isolation containers build natively.
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 

@@ -18,18 +18,22 @@ ENV SF_AUTOUPDATE_DISABLE=true \
     SF_CI_HEARTBEAT_FREQUENCY_MS=60000 \
     NODE_NO_WARNINGS=1
 
-# Install Node.js LTS
-RUN Invoke-WebRequest -Uri 'https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi' -OutFile 'node.msi'; \
-    Start-Process msiexec.exe -ArgumentList '/i', 'node.msi', '/quiet', '/norestart' -Wait; \
-    Remove-Item -Force node.msi
+# Install Chocolatey, then Node.js LTS through it (tracks latest LTS the same
+# way the Linux Dockerfile does via nodesource's setup_lts.x, instead of a
+# hardcoded version that goes stale as plugins raise their minimum node)
+RUN Set-ExecutionPolicy Bypass -Scope Process -Force; \
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
+    Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')); \
+    choco install nodejs-lts -y --no-progress
 
-# Refresh PATH for the RUN layers that follow (msi installers register PATH at machine level,
+# Refresh PATH for the RUN layers that follow (installers register PATH at machine level,
 # but this shell process was already started before that write)
 RUN $machinePath = [System.Environment]::GetEnvironmentVariable('Path', 'Machine'); \
     [System.Environment]::SetEnvironmentVariable('Path', $machinePath, 'Process')
 
 # Install Salesforce CLI and plugins
-RUN npm install --global @salesforce/cli@latest; \
+RUN npm install --global npm@latest; \
+    npm install --global @salesforce/cli@latest; \
     echo y | sf plugins install sfdx-git-delta@^7.3.0; \
     echo y | sf plugins install apex-code-coverage-transformer@latest; \
     echo y | sf plugins install sf-package-list@latest; \
