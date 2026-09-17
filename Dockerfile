@@ -28,4 +28,4 @@ RUN apt-get update && apt-get install -y curl jq git && \
     echo y | sf plugins install apex-code-coverage-transformer@latest && \
     echo y | sf plugins install sf-package-list@latest && \
     echo y | sf plugins install apextestlist@^1.15.0 && \
-    sf version --verbose --json
+    sf version --verbose --json || true
