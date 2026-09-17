@@ -46,7 +46,7 @@ Fork or clone this repository as the starting point for a new SFDX project and y
 | **Reusable manifests** | Pre-made `package.xml` files in `scripts/packages/` (Apex, Automation, Bots, Objects, Security & Access, UI, etc.) for retrieves and targeted deploys |
 | **Static analysis** | PMD rulesets (`scripts/pmd/enforced` + `scripts/pmd/encouraged`) and a SonarQube config (`sonar-project.properties`) |
 | **Quality tooling** | ESLint, Prettier (with Apex + XML plugins), Husky pre-commit hooks, lint-staged, Jest (LWC) |
-| **Docker** | `Dockerfile` and `.dockerignore` for a pipeline runner image that ships with `sf`, the plugins below, and OS deps |
+| **Docker** | `Dockerfile` (Linux, built/pushed by the GitLab `build` job) and `Dockerfile.windows` (Windows Server Core, for Windows-based runners e.g. Bamboo - build/push it yourself, not wired into GitLab CI here) for a pipeline runner image that ships with `sf`, the plugins below, and OS deps |
 | **Einstein Bot support** | `sfdx-project.json` `replacements` and `scripts/replacementFiles/` for swapping the bot run-as user per org |
 
 ## Salesforce CLI Plugins
