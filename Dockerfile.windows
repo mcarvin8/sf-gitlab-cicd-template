@@ -20,11 +20,15 @@ ENV SF_AUTOUPDATE_DISABLE=true \
 
 # Install Chocolatey, then Node.js LTS through it (tracks latest LTS the same
 # way the Linux Dockerfile does via nodesource's setup_lts.x, instead of a
-# hardcoded version that goes stale as plugins raise their minimum node)
+# hardcoded version that goes stale as plugins raise their minimum node).
+# Installed to C:\nodejs (not the default "C:\Program Files\nodejs") because
+# @oclif/plugin-plugins 5.5.x mis-spawns npm when process.execPath contains a
+# space, making every `sf plugins install` fail with a false "does not exist
+# in the registry" - see https://github.com/oclif/plugin-plugins/issues/1387
 RUN Set-ExecutionPolicy Bypass -Scope Process -Force; \
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
     Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')); \
-    choco install nodejs-lts -y --no-progress
+    choco install nodejs-lts -y --no-progress --params "'/InstallDir:C:\nodejs'"
 
 # Refresh PATH for the RUN layers that follow (installers register PATH at machine level,
 # but this shell process was already started before that write)
