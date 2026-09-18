@@ -14,11 +14,11 @@
 ####################################################
 # Prepare a deploy/validate job: generate delta package from sfdx-git-delta,
 # strip ConnectedApp secrets, and discover test classes via apextestlist
-# annotations. BEFORE_SHA must be set on push pipelines (see .deploy-metadata).
+# annotations. CI_COMMIT_BEFORE_SHA must be set on push pipelines (see .deploy-metadata).
 # MR pipelines diff via --merge-base against origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
 # (three-dot semantics) instead of trusting CI_MERGE_REQUEST_DIFF_BASE_SHA,
 # which can go stale after a rebase/force-push; push pipelines diff straight
-# from BEFORE_SHA since branch history there is already linear. DEPLOY_PACKAGE
+# from CI_COMMIT_BEFORE_SHA since branch history there is already linear. DEPLOY_PACKAGE
 # defaults to sfdx-git-delta's own output path (package/package.xml), so no
 # copy step is needed.
 # Requires: sfdx-git-delta >= 7.3.0 (adds --merge-base), apextestlist >= 1.15.0
@@ -32,7 +32,7 @@
       if [ -n "${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-}" ]; then
         sf sgd source delta --from "origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}" --merge-base --output-dir .
       else
-        sf sgd source delta --from "$BEFORE_SHA" --output-dir .
+        sf sgd source delta --from "$CI_COMMIT_BEFORE_SHA" --output-dir .
       fi
       echo "=== Deployment Package ==="
       sf sfpl list -x "$DEPLOY_PACKAGE" || true
@@ -47,8 +47,7 @@
 ####################################################
 # Validate metadata against a Salesforce org (MR pipelines).
 # Delta base is the merge-base with the target branch, resolved in
-# .prepare-deploy via CI_MERGE_REQUEST_TARGET_BRANCH_NAME; no BEFORE_SHA
-# needed here.
+# .prepare-deploy via CI_MERGE_REQUEST_TARGET_BRANCH_NAME;
 ####################################################
 .validate-metadata:
   extends: .prepare-deploy
@@ -80,12 +79,9 @@
 
 ####################################################
 # Deploy metadata into a Salesforce org (push pipelines).
-# BEFORE_SHA: SHA immediately before this push (CI_COMMIT_BEFORE_SHA).
 ####################################################
 .deploy-metadata:
   extends: .prepare-deploy
-  variables:
-    BEFORE_SHA: $CI_COMMIT_BEFORE_SHA
   script:
     - source ./scripts/bash/deploy_metadata_sf.sh
   after_script:
