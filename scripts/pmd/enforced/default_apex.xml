@@ -50,4 +50,13 @@
    <rule ref="category/apex/security.xml/ApexSuggestUsingNamedCred" message="Prefer Named Credentials over hardcoded endpoint credentials">
       <priority>3</priority>
    </rule>
+   <rule ref="category/apex/performance.xml/AvoidSoqlInLoops" message="Avoid SOQL queries inside loops to prevent hitting governor limits">
+      <priority>3</priority>
+   </rule>
+   <rule ref="category/apex/performance.xml/AvoidDmlStatementsInLoops" message="Avoid DML statements inside loops to prevent hitting governor limits">
+      <priority>3</priority>
+   </rule>
+   <rule ref="category/apex/errorprone.xml/EmptyCatchBlock" message="Avoid empty catch blocks; they silently swallow errors">
+      <priority>3</priority>
+   </rule>
 </ruleset>
