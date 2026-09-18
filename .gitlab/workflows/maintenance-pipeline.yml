@@ -83,17 +83,14 @@ packageBackfillSbxDevelop:
     - source ./scripts/bash/retrieve_packages.sh
 
 packageBackfillPrd:
-  stage: maintenance
-  cache: []
+  extends: .packageBackfillSbxBase
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $PACKAGE_NAME && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'prdBackfill'
       when: always
     - when: never
-  allow_failure: false
   variables:
     ORG_BRANCH: $CI_DEFAULT_BRANCH
   script:
-    - npm ci
     - echo $PRODUCTION_AUTH_URL | sf org login sfdx-url --set-default --alias main --sfdx-url-stdin
     - source ./scripts/bash/retrieve_packages.sh
 

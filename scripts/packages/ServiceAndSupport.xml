@@ -52,18 +52,18 @@
         <members>*</members>
         <name>GenAiFunction</name>
     </types>
-   <types>
-      <members>*</members>
-      <name>GenAiPlanner</name>
-   </types>
-   <types>
-      <members>*</members>
-      <name>GenAiPlannerBundle</name>
-   </types>
-   <types>
-      <members>*</members>
-      <name>GenAiPlugin</name>
-   </types>
+    <types>
+        <members>*</members>
+        <name>GenAiPlanner</name>
+    </types>
+    <types>
+        <members>*</members>
+        <name>GenAiPlannerBundle</name>
+    </types>
+    <types>
+        <members>*</members>
+        <name>GenAiPlugin</name>
+    </types>
     <types>
         <members>*</members>
         <name>GenAiPromptTemplate</name>

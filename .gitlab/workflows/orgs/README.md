@@ -4,7 +4,7 @@ This directory contains individual YAML files for each Salesforce org that parti
 
 ## Current Orgs
 
-- **`dev.yml`** - Development sandbox
+- **`dev.yml`** - Development sandbox. Deviates from the `<ORG>_DISABLED` / `AUTH_ALIAS: <ORG>` convention below - it uses `SANDBOX_DISABLED` / `AUTH_ALIAS: SANDBOX` instead of `DEV_DISABLED` / `AUTH_ALIAS: DEV`, since `develop` is the dev sandbox's branch name but "sandbox" is the org's conceptual name in this template. Keep that in mind when searching for its variables.
 - **`fullqa.yml`** - Full QA sandbox
 - **`production.yml`** - Production
 
