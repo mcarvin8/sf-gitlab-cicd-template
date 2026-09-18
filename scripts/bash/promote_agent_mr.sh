@@ -1,12 +1,12 @@
 #!/bin/bash
 ################################################################################
-# Script: promote_johnny_mr.sh
-# Description: For MRs opened into main by the Johnny Cash triage AI agent
-#              (@svc-johnny-triage-agent), automatically opens the two
+# Script: promote_agent_mr.sh
+# Description: For MRs opened into main by an AI triage agent's service
+#              account (@svc-ai-triage-agent), automatically opens the two
 #              companion MRs required by the 3-branch promotion path:
 #                story branch -> develop
 #                story branch -> fullqa
-#              Without these, Johnny-authored work only lands in main and
+#              Without these, agent-authored work only lands in main and
 #              skips the Common Dev and Full QA sandboxes.
 #
 #              Idempotent: if an open MR from the same source branch into
@@ -14,7 +14,7 @@
 #
 # Usage: Called automatically from GitLab CI/CD on merge_request_event
 #        pipelines whose target branch is main and whose author is
-#        the Johnny Cash service account.
+#        the AI agent's service account.
 #
 # Environment Variables Required:
 #   - MAINTAINER_PAT_VALUE: GitLab PAT with api scope (same one used by
@@ -26,14 +26,14 @@
 #   - CI_MERGE_REQUEST_TARGET_BRANCH_NAME
 #
 # Optional Environment Variables:
-#   - JOHNNY_BOT_USERNAME (default: svc-johnny-triage-agent)
-#   - JOHNNY_PROMOTION_TARGETS (default: "develop fullqa")
+#   - AI_AGENT_USERNAME (default: svc-ai-triage-agent)
+#   - AI_AGENT_PROMOTION_TARGETS (default: "develop fullqa")
 ################################################################################
 
 set -euo pipefail
 
-JOHNNY_BOT_USERNAME="${JOHNNY_BOT_USERNAME:-svc-johnny-triage-agent}"
-JOHNNY_PROMOTION_TARGETS="${JOHNNY_PROMOTION_TARGETS:-develop fullqa}"
+AI_AGENT_USERNAME="${AI_AGENT_USERNAME:-svc-ai-triage-agent}"
+AI_AGENT_PROMOTION_TARGETS="${AI_AGENT_PROMOTION_TARGETS:-develop fullqa}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -92,7 +92,7 @@ case "$SOURCE_BRANCH" in
 esac
 
 ################################################################################
-# Verify the MR author is the Johnny Cash service account.
+# Verify the MR author is the AI agent's service account.
 # Defense in depth: the CI rule checks $GITLAB_USER_LOGIN, but that reflects
 # whoever triggered the current pipeline, not necessarily the MR author on
 # subsequent pushes. Confirm via the API.
@@ -113,12 +113,12 @@ if [[ -z "$MR_AUTHOR" ]]; then
     exit 1
 fi
 
-if [[ "$MR_AUTHOR" != "$JOHNNY_BOT_USERNAME" ]]; then
-    print_info "MR author is '$MR_AUTHOR', not '$JOHNNY_BOT_USERNAME'. Skipping promotion."
+if [[ "$MR_AUTHOR" != "$AI_AGENT_USERNAME" ]]; then
+    print_info "MR author is '$MR_AUTHOR', not '$AI_AGENT_USERNAME'. Skipping promotion."
     exit 0
 fi
 
-print_info "Confirmed MR author '$MR_AUTHOR'. Promoting '$SOURCE_BRANCH' to: $JOHNNY_PROMOTION_TARGETS"
+print_info "Confirmed MR author '$MR_AUTHOR'. Promoting '$SOURCE_BRANCH' to: $AI_AGENT_PROMOTION_TARGETS"
 
 # Pull title/description from the original MR so the companions are recognizable.
 ORIG_TITLE=$(echo "$MR_JSON" | jq -r '.title // ""')
@@ -160,7 +160,7 @@ create_promotion_mr() {
     description=$(cat <<EOF
 Automated companion MR for the 3-branch promotion path.
 
-This MR was opened automatically because @${JOHNNY_BOT_USERNAME} opened
+This MR was opened automatically because @${AI_AGENT_USERNAME} opened
 ${ORIG_WEB_URL} into \`${DEFAULT_BRANCH}\`. Per the repo's promotion model,
 the same story branch must also be merged into \`develop\` and \`fullqa\`.
 
@@ -214,7 +214,7 @@ EOF
 }
 
 exit_code=0
-for target in $JOHNNY_PROMOTION_TARGETS; do
+for target in $AI_AGENT_PROMOTION_TARGETS; do
     if ! create_promotion_mr "$target"; then
         exit_code=1
     fi

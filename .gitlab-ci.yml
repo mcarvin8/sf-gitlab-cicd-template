@@ -58,9 +58,9 @@ variables:
   VALID_BRANCH_PREFIXES: ""
   # Comma-separated list of protected sandboxes which shouldn't be refreshed via the sandboxRefresh pipeline.
   DO_NOT_REFRESH: "UAT,QA"
-  # GitLab username of the AI triage service account whose MRs into the default branch
-  # trigger the johnnyPromoteMR job. Must match the value used in promote_johnny_mr.sh.
-  JOHNNY_BOT_USERNAME: "svc-johnny-triage-agent"
+  # GitLab username of the AI triage agent's service account whose MRs into the default
+  # branch trigger the agentPromoteMR job. Must match the value used in promote_agent_mr.sh.
+  AI_AGENT_USERNAME: "svc-ai-triage-agent"
   # Set to "true" to use validate-then-quick-deploy for production Apex pushes (faster compilation).
   # Recommended for large orgs. Defaults to false (direct deploy with tests).
   QUICK_DEPLOY: "false"

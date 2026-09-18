@@ -155,19 +155,19 @@ refreshSbxBranches:
     - source ./scripts/bash/refresh_sandbox_branches.sh
 
 ####################################################
-# Auto-promote Johnny Cash triage agent MRs.
-# When @svc-johnny-triage-agent opens an MR into main, this job opens
-# the two companion MRs (story -> develop, story -> fullqa) required
-# by the 3-branch promotion path. Idempotent: skips targets that
+# Auto-promote AI triage agent MRs.
+# When the configured AI agent service account opens an MR into main,
+# this job opens the two companion MRs (story -> develop, story -> fullqa)
+# required by the 3-branch promotion path. Idempotent: skips targets that
 # already have an open MR from the same source branch.
 ####################################################
-johnnyPromoteMR:
+agentPromoteMR:
   stage: maintenance
   cache: []
   rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event' && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH && $GITLAB_USER_LOGIN == $JOHNNY_BOT_USERNAME
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event' && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH && $GITLAB_USER_LOGIN == $AI_AGENT_USERNAME
       when: always
     - when: never
   allow_failure: true
   script:
-    - source ./scripts/bash/promote_johnny_mr.sh
+    - source ./scripts/bash/promote_agent_mr.sh

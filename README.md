@@ -143,9 +143,9 @@ The plugin (`sf-git-ai-meta-insights`) auto-detects the LLM provider from enviro
 
 Set `LLM_PROVIDER` to force a specific provider when multiple credentials are present. Set `METADATA_AUDIT_FAIL_ON_ERROR=1` to exit on plugin failure (default: warn and continue).
 
-#### Johnny Agent Promotion (`johnnyPromoteMR`)
+#### AI Agent Promotion (`agentPromoteMR`)
 
-When an AI triage service account (default: `svc-johnny-triage-agent`) opens a merge request targeting `main`, this job automatically creates companion MRs from the same source branch into `develop` and `fullqa`. This ensures agent-authored work flows through the full 3-branch promotion path rather than landing only in production.
+When an AI triage service account (default: `svc-ai-triage-agent`) opens a merge request targeting `main`, this job automatically creates companion MRs from the same source branch into `develop` and `fullqa`. This ensures agent-authored work flows through the full 3-branch promotion path rather than landing only in production.
 
 The job is idempotent — if an open MR from the same source branch into the target already exists, it is skipped.
 
@@ -159,8 +159,8 @@ The job is idempotent — if an open MR from the same source branch into the tar
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `JOHNNY_BOT_USERNAME` | `svc-johnny-triage-agent` | GitLab username of the AI service account |
-| `JOHNNY_PROMOTION_TARGETS` | `develop fullqa` | Space-separated list of branches to open companion MRs into |
+| `AI_AGENT_USERNAME` | `svc-ai-triage-agent` | GitLab username of the AI service account |
+| `AI_AGENT_PROMOTION_TARGETS` | `develop fullqa` | Space-separated list of branches to open companion MRs into |
 
 Remove this job if you are not using an AI triage agent in your workflow.
 
