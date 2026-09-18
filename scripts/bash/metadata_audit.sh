@@ -3,8 +3,8 @@
 # Script: metadata_audit.sh
 # Description:
 #   Weekly metadata audit: for each configured team, runs the sf-git-ai-meta-insights
-#   plugin (OpenAI-compatible LLM) against the past week of commits filtered by
-#   Jira key pattern, then uploads the generated Markdown summary to Confluence.
+#   plugin against the past week of commits filtered by Jira key pattern, then
+#   uploads the generated Markdown summary to Confluence.
 #
 #   One `git log origin/$CI_DEFAULT_BRANCH` resolves the FROM ref (last commit strictly
 #   before one week ago). The plugin is invoked once per team with --commit-message-include
@@ -18,7 +18,6 @@
 #   - Salesforce CLI (sf) with plugin: sf-git-ai-meta-insights
 #   - Node.js 20+ (required by the plugin)
 #   - curl
-#   - jq
 #
 # Required Environment Variables:
 #   # Teams (space-separated; each entry is "team" or "team:jira-regex")
@@ -51,6 +50,8 @@
 #   - LLM_PROVIDER                    # force a specific provider (see table above)
 #   - METADATA_AUDIT_FAIL_ON_ERROR=1  # exit if the plugin fails for any team (default: warn and continue)
 #   - METADATA_AUDIT_TO                # end ref for summarize (default: origin/$CI_DEFAULT_BRANCH)
+#   - METADATA_AUDIT_MODEL             # model passed to --model (default: o4-mini); override
+#                                       # this if your LLM_PROVIDER isn't openai/openai-compatible
 ################################################################################
 
 # --- Required env var checks ---------------------------------------------------
@@ -64,6 +65,7 @@
 
 
 METADATA_AUDIT_TO="${METADATA_AUDIT_TO:-origin/${CI_DEFAULT_BRANCH}}"
+METADATA_AUDIT_MODEL="${METADATA_AUDIT_MODEL:-o4-mini}"
 
 # Parse METADATA_AUDIT_TEAMS into an associative array of team -> jira regex.
 # Each entry is "team" (regex defaults to team name) or "team:regex".
@@ -113,7 +115,7 @@ for team in "${!TEAM_JIRA_REGEX[@]}"; do
     --commit-message-include "$jira_regex" \
     --team "$team" \
     --output "$summary_file" --ignore-whitespace \
-    --model "o4-mini"; then
+    --model "$METADATA_AUDIT_MODEL"; then
     echo "WARNING: sf sgai metadata summarize failed for team '${team}'." >&2
     if [[ "${METADATA_AUDIT_FAIL_ON_ERROR:-}" == "1" ]]; then
       exit 1

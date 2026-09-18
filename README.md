@@ -144,6 +144,8 @@ The plugin (`sf-git-ai-meta-insights`) auto-detects the LLM provider from enviro
 
 Set `LLM_PROVIDER` to force a specific provider when multiple credentials are present. Set `METADATA_AUDIT_FAIL_ON_ERROR=1` to exit on plugin failure (default: warn and continue).
 
+The job always passes an explicit `--model` to the plugin, which overrides that "Default model" column above - it defaults to `o4-mini` (an OpenAI model id). If you're using any provider other than `openai`/`openai-compatible`, set `METADATA_AUDIT_MODEL` to a model your provider supports (e.g. `claude-3-5-haiku-latest` for `anthropic`).
+
 #### AI Agent Promotion (`agentPromoteMR`)
 
 When an AI triage service account (default: `svc-ai-triage-agent`) opens a merge request targeting `main`, this job automatically creates companion MRs from the same source branch into `develop` and `fullqa`. This ensures agent-authored work flows through the full 3-branch promotion path rather than landing only in production.
