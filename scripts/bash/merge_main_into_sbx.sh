@@ -1,13 +1,13 @@
 #!/bin/bash
 ################################################################################
 # Script: merge_main_into_sbx.sh
-# Description: Automatically merges changes from the main (production) branch
+# Description: Automatically merges changes from the default (production) branch
 #              into sandbox branches (fullqa and develop). Resolves conflicts
-#              by preferring the main branch version. Skips CI pipeline on push.
+#              by preferring the default branch version. Skips CI pipeline on push.
 # Usage: Called from CI/CD pipeline after successful production deployment
 # Environment Variables Required:
 #   - MAINTAINER_PAT_NAME, MAINTAINER_PAT_VALUE
-#   - CI_SERVER_HOST, CI_PROJECT_PATH, CI_COMMIT_SHORT_SHA
+#   - CI_SERVER_HOST, CI_PROJECT_PATH, CI_COMMIT_SHORT_SHA, CI_DEFAULT_BRANCH
 ################################################################################
 set -e
 
@@ -32,10 +32,10 @@ for branch_name in fullqa develop
 do
     git checkout -q $branch_name
     git pull --ff -q
-    # Merge changes from main branch, using "theirs" strategy to deal with conflicts
-    git merge --no-ff -X theirs --no-commit origin/main || true
+    # Merge changes from the default branch, using "theirs" strategy to deal with conflicts
+    git merge --no-ff -X theirs --no-commit "origin/${CI_DEFAULT_BRANCH}" || true
     handle_delete_conflicts
-    git commit -m "Merge remote-tracking branch 'origin/main' into $branch_name"
+    git commit -m "Merge remote-tracking branch 'origin/${CI_DEFAULT_BRANCH}' into $branch_name"
     # Push changes to remote, skipping CI pipeline
     git push "https://${MAINTAINER_PAT_NAME}:${MAINTAINER_PAT_VALUE}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" -o ci.skip
 done
