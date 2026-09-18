@@ -23,9 +23,9 @@ RUN apt-get update && apt-get install -y curl jq git && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/* && \
     npm install --global npm@latest && \
-    npm install --global @salesforce/cli@latest && \
+    npm install --global @salesforce/cli@latest-rc && \
     echo y | sf plugins install sfdx-git-delta@^7.3.0 && \
     echo y | sf plugins install apex-code-coverage-transformer@latest && \
     echo y | sf plugins install sf-package-list@latest && \
     echo y | sf plugins install apextestlist@^1.15.0 && \
-    sf version --verbose --json || true
+    sf version --verbose --json
