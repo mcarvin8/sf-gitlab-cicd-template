@@ -20,11 +20,7 @@ ENV SF_AUTOUPDATE_DISABLE=true \
 
 # Install Chocolatey, then Node.js LTS through it (tracks latest LTS the same
 # way the Linux Dockerfile does via nodesource's setup_lts.x, instead of a
-# hardcoded version that goes stale as plugins raise their minimum node).
-# Installed to C:\nodejs (not the default "C:\Program Files\nodejs") because
-# @oclif/plugin-plugins 5.5.x mis-spawns npm when process.execPath contains a
-# space, making every `sf plugins install` fail with a false "does not exist
-# in the registry" - see https://github.com/oclif/plugin-plugins/issues/1387
+# hardcoded version that goes stale as plugins raise their minimum node)
 RUN Set-ExecutionPolicy Bypass -Scope Process -Force; \
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
     Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')); \
@@ -35,7 +31,11 @@ RUN Set-ExecutionPolicy Bypass -Scope Process -Force; \
 RUN $machinePath = [System.Environment]::GetEnvironmentVariable('Path', 'Machine'); \
     [System.Environment]::SetEnvironmentVariable('Path', $machinePath, 'Process')
 
-# Install Salesforce CLI and plugins
+# Install Salesforce CLI and plugins. Pinned to latest-rc, not latest, because
+# @salesforce/cli@latest still bundles the broken @oclif/plugin-plugins@5.5.1
+# (false "does not exist in the registry" on every `sf plugins install`);
+# latest-rc already carries the fix. Switch back to @latest once that fix is
+# promoted to GA - see https://github.com/oclif/plugin-plugins/issues/1387
 RUN npm install --global npm@latest; \
     npm install --global @salesforce/cli@latest-rc; \
     echo y | sf plugins install sfdx-git-delta@^7.3.0; \
