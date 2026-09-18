@@ -7,6 +7,10 @@ on:
       - Dockerfile
       - Dockerfile.windows
       - .dockerignore
+  schedule:
+    # Rebuild weekly so latest/windows tags stay current on sf CLI and
+    # plugin versions even when the Dockerfiles themselves don't change.
+    - cron: '0 6 * * 1'
   workflow_dispatch: {}
 
 env:
