@@ -168,7 +168,7 @@ johnnyPromoteMR:
   stage: maintenance
   cache: []
   rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event' && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH && $GITLAB_USER_LOGIN == 'svc-johnny-triage-agent'
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event' && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH && $GITLAB_USER_LOGIN == $JOHNNY_BOT_USERNAME
       when: always
     - when: never
   allow_failure: true
