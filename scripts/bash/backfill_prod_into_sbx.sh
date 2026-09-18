@@ -1,6 +1,6 @@
 #!/bin/bash
 ################################################################################
-# Script: merge_main_into_sbx.sh
+# Script: backfill_prod_into_sbx.sh
 # Description: Automatically merges changes from the default (production) branch
 #              into sandbox branches (fullqa and develop). Resolves conflicts
 #              by preferring the default branch version. Skips CI pipeline on push.

@@ -48,7 +48,7 @@ prodBackfill:
     - when: never
   allow_failure: true
   script:
-    - source ./scripts/bash/merge_main_into_sbx.sh
+    - source ./scripts/bash/backfill_prod_into_sbx.sh
 
 ####################################################
 # Retrieve metadata from sandboxes into GitLab branches (parallel: one job per branch).
