@@ -1,7 +1,7 @@
 ####################################################
 # Dev Org Jobs
-# All deployment jobs for the development (sandbox) environment.
-# Set DEV_ORG_URL, SANDBOX_AUTH_URL as CI/CD variables in your project.
+# All deployment jobs for the development (DEV) environment.
+# Set DEV_ORG_URL, DEV_AUTH_URL as CI/CD variables in your project.
 ####################################################
 
 test:unit:dev:
@@ -11,8 +11,8 @@ test:unit:dev:
       when: always
     - when: never
   variables:
-    AUTH_ALIAS: SANDBOX
-    AUTH_URL: $SANDBOX_AUTH_URL
+    AUTH_ALIAS: DEV
+    AUTH_URL: $DEV_AUTH_URL
 
 test:postrun:dev:
   extends: .test-postrun
@@ -23,8 +23,8 @@ test:postrun:dev:
     - when: never
   needs: ['test:unit:dev']
   variables:
-    AUTH_ALIAS: SANDBOX
-    AUTH_URL: $SANDBOX_AUTH_URL
+    AUTH_ALIAS: DEV
+    AUTH_URL: $DEV_AUTH_URL
 
 test:predeploy:dev:
   image: $CI_REGISTRY_IMAGE:$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
@@ -38,8 +38,8 @@ test:predeploy:dev:
       when: manual
   allow_failure: false
   variables:
-    AUTH_ALIAS: SANDBOX
-    AUTH_URL: $SANDBOX_AUTH_URL
+    AUTH_ALIAS: DEV
+    AUTH_URL: $DEV_AUTH_URL
   environment:
     name: validate-dev
     url: $DEV_ORG_URL
@@ -50,7 +50,7 @@ deploy:dev:
   stage: deploy
   resource_group: develop
   rules:
-    - if: $SANDBOX_DISABLED
+    - if: $DEV_DISABLED
       when: never
     - if: '$CI_COMMIT_MESSAGE =~ /chore\(metadata-retrieval\):/i'
       when: never
@@ -58,8 +58,8 @@ deploy:dev:
       when: always
   allow_failure: false
   variables:
-    AUTH_ALIAS: SANDBOX
-    AUTH_URL: $SANDBOX_AUTH_URL
+    AUTH_ALIAS: DEV
+    AUTH_URL: $DEV_AUTH_URL
   environment:
     name: dev
     url: $DEV_ORG_URL
@@ -70,14 +70,14 @@ destroy:dev:
   stage: destroy
   resource_group: develop
   rules:
-    - if: $SANDBOX_DISABLED
+    - if: $DEV_DISABLED
       when: never
     - if: $CI_COMMIT_REF_NAME == 'develop' && $CI_PIPELINE_SOURCE == 'web' && $PACKAGE
       when: always
   allow_failure: false
   variables:
-    AUTH_ALIAS: SANDBOX
-    AUTH_URL: $SANDBOX_AUTH_URL
+    AUTH_ALIAS: DEV
+    AUTH_URL: $DEV_AUTH_URL
   environment:
     name: dev
     url: $DEV_ORG_URL
@@ -88,7 +88,7 @@ destroy:dev:push:
   stage: destroy
   resource_group: develop
   rules:
-    - if: $SANDBOX_DISABLED
+    - if: $DEV_DISABLED
       when: never
     - if: '$CI_COMMIT_MESSAGE =~ /chore\(metadata-retrieval\):/i'
       when: never
@@ -96,8 +96,8 @@ destroy:dev:push:
       when: always
   allow_failure: true
   variables:
-    AUTH_ALIAS: SANDBOX
-    AUTH_URL: $SANDBOX_AUTH_URL
+    AUTH_ALIAS: DEV
+    AUTH_URL: $DEV_AUTH_URL
   environment:
     name: dev
     url: $DEV_ORG_URL

@@ -89,6 +89,12 @@ SLACK
 function share_slack_update_build() {
     local slack_webhook
     slack_webhook="$SLACK_WEBHOOK_URL"
+
+    if [[ -z "${slack_webhook}" ]]; then
+        echo "SLACK_WEBHOOK_URL not set, skipping Slack notification."
+        return 0
+    fi
+
     curl -X POST \
         --data-urlencode "payload=$(print_slack_summary_build)" \
         "${slack_webhook}"

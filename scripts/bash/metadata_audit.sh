@@ -6,8 +6,8 @@
 #   plugin (OpenAI-compatible LLM) against the past week of commits filtered by
 #   Jira key pattern, then uploads the generated Markdown summary to Confluence.
 #
-#   One `git log origin/main` resolves the FROM ref (last commit strictly before
-#   one week ago). The plugin is invoked once per team with --commit-message-include
+#   One `git log origin/$CI_DEFAULT_BRANCH` resolves the FROM ref (last commit strictly
+#   before one week ago). The plugin is invoked once per team with --commit-message-include
 #   set to that team's Jira project key pattern.
 #
 # Usage:
@@ -50,7 +50,7 @@
 # Optional:
 #   - LLM_PROVIDER                    # force a specific provider (see table above)
 #   - METADATA_AUDIT_FAIL_ON_ERROR=1  # exit if the plugin fails for any team (default: warn and continue)
-#   - METADATA_AUDIT_TO=origin/main   # end ref for summarize (default: origin/main)
+#   - METADATA_AUDIT_TO                # end ref for summarize (default: origin/$CI_DEFAULT_BRANCH)
 ################################################################################
 
 # --- Required env var checks ---------------------------------------------------
@@ -63,7 +63,7 @@
 : "${CONFLUENCE_BASE_URL:?Must set CONFLUENCE_BASE_URL (e.g. https://yourorg.atlassian.net)}"
 
 
-METADATA_AUDIT_TO="${METADATA_AUDIT_TO:-origin/main}"
+METADATA_AUDIT_TO="${METADATA_AUDIT_TO:-origin/${CI_DEFAULT_BRANCH}}"
 
 # Parse METADATA_AUDIT_TEAMS into an associative array of team -> jira regex.
 # Each entry is "team" (regex defaults to team name) or "team:regex".
@@ -79,12 +79,12 @@ done
 # --- Git setup ----------------------------------------------------------------
 
 git fetch -q
-git fetch origin main
+git fetch origin "$CI_DEFAULT_BRANCH"
 
-# Single git log on origin/main: FROM = newest commit strictly older than 1 week ago
-FROM=$(git log origin/main -1 --before="1 week ago" --pretty=format:%H)
+# Single git log on origin/$CI_DEFAULT_BRANCH: FROM = newest commit strictly older than 1 week ago
+FROM=$(git log "origin/${CI_DEFAULT_BRANCH}" -1 --before="1 week ago" --pretty=format:%H)
 if [[ -z "$FROM" ]]; then
-  echo "ERROR: Could not resolve FROM via: git log origin/main -1 --before=\"1 week ago\""
+  echo "ERROR: Could not resolve FROM via: git log origin/${CI_DEFAULT_BRANCH} -1 --before=\"1 week ago\""
   echo "       Check shallow clone depth or branch history."
   exit 1
 fi

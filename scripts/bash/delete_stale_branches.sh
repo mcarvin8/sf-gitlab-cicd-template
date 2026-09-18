@@ -1,14 +1,15 @@
 #!/bin/bash
 ################################################################################
 # Script: delete_stale_branches.sh
-# Description: Deletes stale Git branches that have been merged into main 
-#              and haven't been updated in a specified time period.
-#              - Branches merged into main where HEAD commit is older than 1 month
+# Description: Deletes stale Git branches that have been merged into the
+#              default branch and haven't been updated in a specified time period.
+#              - Branches merged into the default branch where HEAD commit is older than 1 month
 #              - Any branches where HEAD commit is older than 3 months
 # Usage: Called from scheduled CI/CD pipeline
 # Note: Protected branches cannot be deleted via this script
 # Environment Variables Required:
 #   - MAINTAINER_PAT_NAME, MAINTAINER_PAT_VALUE
+#   - CI_DEFAULT_BRANCH (predefined by GitLab)
 ################################################################################
 set -euo pipefail
 
@@ -56,9 +57,9 @@ check_branch_last_commit_date() {
 ################################################################################
 # Delete merged branches where last commit is older than cutoff date
 ################################################################################
-filter='git branch --merged origin/main -r'
-echo "Deleting all branches merged into main branch with last commit over $before_date"
-for k in $(${filter} | grep --invert-match origin/main | sed /\*/d); do 
+filter="git branch --merged origin/${CI_DEFAULT_BRANCH} -r"
+echo "Deleting all branches merged into ${CI_DEFAULT_BRANCH} branch with last commit over $before_date"
+for k in $(${filter} | grep --invert-match "origin/${CI_DEFAULT_BRANCH}" | sed /\*/d); do
     if check_branch_last_commit_date "$k" "$before_date"; then
         branch=$(echo $k | sed 's/origin\///')
         echo "Attempting to delete $branch"
@@ -78,8 +79,8 @@ echo "Deleting all stale branches with last commit over $stale_before_date"
 
 # Use git for-each-ref to get all remote branches - much faster than git branch -r
 while IFS='|' read -r refname committerdate; do
-    # Skip main branch
-    if [[ "$refname" == "origin/main" ]] || [[ "$refname" == "origin/HEAD" ]]; then
+    # Skip default branch
+    if [[ "$refname" == "origin/${CI_DEFAULT_BRANCH}" ]] || [[ "$refname" == "origin/HEAD" ]]; then
         continue
     fi
     

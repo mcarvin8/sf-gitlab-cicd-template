@@ -15,6 +15,12 @@ set -euo pipefail
 function share_slack_update_build() {
     local slack_webhook
     slack_webhook="$SLACK_WEBHOOK_URL"
+
+    if [[ -z "${slack_webhook}" ]]; then
+        echo "SLACK_WEBHOOK_URL not set, skipping Slack notification."
+        return 0
+    fi
+
     local payload_file="slackPayload.json"
 
     # Check if the payload file exists

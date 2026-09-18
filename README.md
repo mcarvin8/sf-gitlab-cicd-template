@@ -98,12 +98,16 @@ build -> maintenance -> test -> quality -> destroy -> deploy
 - **rollback** - roll back a previous deployment using a `$SHA` variable. Triggered via a web pipeline. Creates a revert commit; `sfdx-git-delta` generates the correct delta automatically.
 - **sandboxRefresh** - create or refresh a sandbox via the SF CLI, gated by a tag pattern (`sandbox_v*`). Triggered via a web pipeline. Sandbox definition file stored here: `config/sandbox-def.json` (template uses a public group to provide user access to new sandboxes and runs the Apex Class `PrepareMySandbox` which is provided in this repo).
 - **prodBackfill** - automatically back-promotes commits from the default branch into lower org branches (e.g. `develop`, `fullqa`) on every push to `main`. Runs as part of every production push pipeline so the org branching model stays in sync. Without this, merge commits and other commits that land directly on `main` show up as unmerged changes in GitLab MRs on downstream branches. Allowed to fail so it never blocks a production deploy.
+- **branchCleanup** - deletes stale git branches (merged branches with a last commit over 1 month old, any branch over 3 months old). Triggered via a scheduled pipeline with `$JOB_NAME=monthlyMaintenance`. Protected branches are skipped.
+- **pipelineCleanup** - deletes GitLab pipelines older than 1 month via the REST API to reduce clutter/storage. Triggered via the same `monthlyMaintenance` scheduled pipeline. Requires `$OWNER_PAT_VALUE` (see below) - the GitLab pipeline-delete API endpoint requires the **Owner** role, which `$MAINTAINER_PAT_VALUE` does not have.
 
 The jobs that perform git operations require a GitLab project access token with the `Maintainer` role and `api` + `write_repository` scopes. Provide it through these variables:
 
 - `MAINTAINER_PAT_NAME` - display name of the token user
 - `MAINTAINER_PAT_USER_NAME` - username of the token user
 - `MAINTAINER_PAT_VALUE` - the token value itself
+
+`pipelineCleanup` needs its own, more privileged token - see `$OWNER_PAT_VALUE` in [Custom CI/CD Variables](#custom-cicd-variables).
 
 Remove any of these jobs you don't need.
 
@@ -351,6 +355,7 @@ The scripts in `scripts/bash/` are not GitLab-specific - they read from environm
 | `$VALID_BRANCH_PREFIXES` | space-separated substrings required in MR source branch names; `pre-merge-check` fails branches that match none. Leave empty to skip enforcement. |
 | `$CONFLUENCE_BASE_URL` | Confluence base URL for `metadataAudit` job (e.g. `https://yourorg.atlassian.net`) |
 | `$MAINTAINER_PAT_NAME` / `$MAINTAINER_PAT_USER_NAME` / `$MAINTAINER_PAT_VALUE` | project access token used by maintenance jobs that push to the repo |
+| `$OWNER_PAT_VALUE` | project/group access token with the **Owner** role and `api` scope, used by the `pipelineCleanup` job to delete old pipelines via the GitLab REST API - `Maintainer`-scoped tokens (e.g. `$MAINTAINER_PAT_VALUE`) cannot delete pipelines |
 | `$DO_NOT_REFRESH` | Comma-separated list of protected sandboxes which shouldn't be refreshed via the sandboxRefresh pipeline |
 | `$QUICK_DEPLOY` | Set to `"true"` to use validate-then-quick-deploy for production Apex pushes (faster Apex compilation). Recommended for large orgs. Default: `"false"` (direct deploy with tests). |
 

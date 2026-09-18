@@ -17,7 +17,7 @@
 #   - CI_COMMIT_SHORT_SHA: used when cleaning up local branches after recreation
 # Configurable (with defaults):
 #   DEV_BRANCH (develop), FULLQA_BRANCH (fullqa)
-#   DEV_AUTH_URL_VAR (SANDBOX_AUTH_URL), FULLQA_AUTH_URL_VAR (FULLQA_AUTH_URL)
+#   DEV_AUTH_URL_VAR (DEV_AUTH_URL), FULLQA_AUTH_URL_VAR (FULLQA_AUTH_URL)
 ################################################################################
 
 set -e
@@ -60,7 +60,7 @@ check_required_var "CI_SERVER_HOST"
 # Configurable branch and CI/CD variable names
 DEV_BRANCH="${DEV_BRANCH:-develop}"
 FULLQA_BRANCH="${FULLQA_BRANCH:-fullqa}"
-DEV_AUTH_URL_VAR="${DEV_AUTH_URL_VAR:-SANDBOX_AUTH_URL}"
+DEV_AUTH_URL_VAR="${DEV_AUTH_URL_VAR:-DEV_AUTH_URL}"
 FULLQA_AUTH_URL_VAR="${FULLQA_AUTH_URL_VAR:-FULLQA_AUTH_URL}"
 
 # Determine project ID and ensure CI_PROJECT_PATH is set (needed for git operations)

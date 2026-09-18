@@ -79,7 +79,7 @@ packageBackfillSbxDevelop:
   variables:
     ORG_BRANCH: develop
   script:
-    - echo $SANDBOX_AUTH_URL | sf org login sfdx-url --set-default --alias develop --sfdx-url-stdin
+    - echo $DEV_AUTH_URL | sf org login sfdx-url --set-default --alias develop --sfdx-url-stdin
     - source ./scripts/bash/retrieve_packages.sh
 
 packageBackfillPrd:
