@@ -120,7 +120,7 @@ scripts/
 
 - Salesforce CLI (`sf`) with plugins: sfdx-git-delta (`>= 7.3.0`, needs `--merge-base`), apex-code-coverage-transformer, sf-package-list, apextestlist (`>= 1.15.0`, needs `--fail-on-empty`)
 - GitLab CI runners (Docker-based, image defined in `Dockerfile`)
-- Pre-commit hooks (lint + secret scanning)
+- Pre-commit hooks (lint-staged: ESLint + Prettier, including Apex/XML plugins)
 
 ---
 
@@ -129,9 +129,8 @@ scripts/
 1. **Missing `@tests:` annotations** — results in zero tests running and a potential CI failure for Apex deployments
 2. **Profiles edited** — changes ignored or rejected; use Permission Sets
 3. **Wrong branching strategy** — branching from `develop`/`fullqa` causes conflicts during promotion
-4. **Secrets in commits** — blocked by hooks or CI
-5. **Environment-specific values hardcoded** — handled at deploy time via sfdx-project.json replacements or CI variables
-6. **ConnectedApp consumerKey left in source** — CI pipeline strips it automatically via `sed`; don't re-add it
+4. **Environment-specific values hardcoded** — handled at deploy time via sfdx-project.json replacements or CI variables
+5. **ConnectedApp consumerKey left in source** — CI pipeline strips it automatically via `sed`; don't re-add it
 
 ---
 
