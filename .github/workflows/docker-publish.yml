@@ -50,6 +50,21 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: echo $env:DOCKERHUB_TOKEN | docker login -u $env:DOCKERHUB_USERNAME --password-stdin
 
+      # windows-latest's Docker Engine service can still be starting up when
+      # this job begins, which fails the Build step with "failed to connect
+      # to the docker API at npipe:////./pipe/docker_engine". Poll until it
+      # responds instead of racing it.
+      - name: Wait for Docker
+        run: |
+          $tries = 0
+          while ($true) {
+            docker info *> $null
+            if ($LASTEXITCODE -eq 0) { break }
+            $tries++
+            if ($tries -ge 30) { throw "Docker daemon did not become ready in time" }
+            Start-Sleep -Seconds 2
+          }
+
       - name: Build
         run: docker build -f Dockerfile.windows -t "${{ env.IMAGE_NAME }}:windows" -t "${{ env.IMAGE_NAME }}:windows-ltsc2022" .
 

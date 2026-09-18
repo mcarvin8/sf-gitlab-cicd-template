@@ -7,7 +7,7 @@ Docker image with Salesforce CLI (`sf`) preinstalled, used by the CI/CD pipeline
 
 | Tag | Base | Notes |
 | --- | --- | --- |
-| `latest`, `linux` | `ubuntu:latest` | Linux runners |
+| `latest`, `linux` | `node:22-bookworm-slim` | Linux runners |
 | `windows`, `windows-ltsc2022` | `mcr.microsoft.com/windows/servercore:ltsc2022` | Windows Server 2022 runners |
 
 ## What's included
