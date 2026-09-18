@@ -14,4 +14,40 @@
    </rule>
    <rule ref="category/apex/bestpractices.xml/UnusedLocalVariable" />
    <rule ref="category/apex/design.xml/UnusedMethod" />
+   <rule ref="category/apex/bestpractices.xml/AvoidHardcodingId" message="Hardcoded Salesforce IDs will break when deployed to a different org">
+      <priority>3</priority>
+   </rule>
+   <rule ref="category/apex/security.xml/ApexCRUDViolation" message="Enforce CRUD/FLS checks before DML or SOQL">
+      <priority>3</priority>
+   </rule>
+   <rule ref="category/apex/security.xml/ApexSOQLInjection" message="Avoid dynamic SOQL built from unescaped user input">
+      <priority>3</priority>
+   </rule>
+   <rule ref="category/apex/security.xml/ApexSharingViolations" message="Classes should declare a sharing model instead of defaulting to without sharing">
+      <priority>3</priority>
+   </rule>
+   <rule ref="category/apex/security.xml/ApexOpenRedirect" message="Avoid open redirects built from unescaped user input">
+      <priority>3</priority>
+   </rule>
+   <rule ref="category/apex/security.xml/ApexXSSFromURLParam" message="Avoid XSS from unescaped URL parameters">
+      <priority>3</priority>
+   </rule>
+   <rule ref="category/apex/security.xml/ApexXSSFromEscapeFalse" message="Avoid disabling escaping when writing user-controlled data to a page">
+      <priority>3</priority>
+   </rule>
+   <rule ref="category/apex/security.xml/ApexBadCrypto" message="Avoid hardcoded cryptographic keys or non-random IVs">
+      <priority>3</priority>
+   </rule>
+   <rule ref="category/apex/security.xml/ApexCSRF" message="Avoid performing DML in a class constructor">
+      <priority>3</priority>
+   </rule>
+   <rule ref="category/apex/security.xml/ApexInsecureEndpoint" message="Avoid http:// endpoints; use https://">
+      <priority>3</priority>
+   </rule>
+   <rule ref="category/apex/security.xml/ApexDangerousMethods" message="Avoid dangerous methods such as FinancialInfoConverter.convertToDataSource">
+      <priority>3</priority>
+   </rule>
+   <rule ref="category/apex/security.xml/ApexSuggestUsingNamedCred" message="Prefer Named Credentials over hardcoded endpoint credentials">
+      <priority>3</priority>
+   </rule>
 </ruleset>
