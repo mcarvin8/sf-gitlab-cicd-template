@@ -22,4 +22,4 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: mcarvin8/sf-cli
           readme-filepath: DOCKER_README.md
-          short-description: ${{ github.event.repository.description }}
+          short-description: Salesforce CLI (sf) preinstalled, for Salesforce CI/CD pipelines
