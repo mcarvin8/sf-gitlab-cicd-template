@@ -1,4 +1,4 @@
-FROM ubuntu:latest
+FROM node:22-bookworm-slim
 
 # Set Salesforce CLI Environment Variables
 # https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_dev_cli_env_variables.htm
@@ -16,11 +16,10 @@ ENV SF_AUTOUPDATE_DISABLE=true \
     SF_CI_HEARTBEAT_FREQUENCY_MS=60000 \
     NODE_NO_WARNINGS=1
 
-# Install Salesforce CLI and other required software (git, jq, curl, nodejs)
+# Install Salesforce CLI and other required software (git, jq, curl); nodejs
+# already ships in the base image
 # Print Salesforce CLI version in format accepted for Salesforce CLI bugs on GitHub
 RUN apt-get update && apt-get install -y curl jq git && \
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
-    apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/* && \
     npm install --global npm@latest && \
     npm install --global @salesforce/cli@latest-rc && \
