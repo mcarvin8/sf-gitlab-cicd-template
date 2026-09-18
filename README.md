@@ -38,16 +38,16 @@ Fork or clone this repository as the starting point for a new SFDX project and y
 
 ## What's in the Template
 
-| Area | What you get |
-| --- | --- |
-| **SFDX project skeleton** | `sfdx-project.json`, `force-app/`, `config/`, `.forceignore`, namespace-ready packaged plugin dependencies |
-| **CI/CD pipeline** | Modular GitLab pipeline split across `.gitlab/workflows/` (base templates, core jobs, test/quality, maintenance, and per-org files under `orgs/`) |
-| **Deployment scripting** | `scripts/bash/` for delta package generation, incremental deploy, destroy, rollback, sandbox refresh, branch back-merge, Slack status posting, etc. |
-| **Reusable manifests** | Pre-made `package.xml` files in `scripts/packages/` (Apex, Automation, Bots, Objects, Security & Access, UI, etc.) for retrieves and targeted deploys |
-| **Static analysis** | PMD rulesets (`scripts/pmd/enforced` + `scripts/pmd/encouraged`) and a SonarQube config (`sonar-project.properties`) |
-| **Quality tooling** | ESLint, Prettier (with Apex + XML plugins), Husky pre-commit hooks, lint-staged, Jest (LWC) |
-| **Docker** | `Dockerfile` (Linux, built/pushed by the GitLab `build` job) and `Dockerfile.windows` (Windows Server Core, for Windows-based runners e.g. Bamboo - build/push it yourself, not wired into GitLab CI here) for a pipeline runner image that ships with `sf`, the plugins below, and OS deps |
-| **Einstein Bot support** | `sfdx-project.json` `replacements` and `scripts/replacementFiles/` for swapping the bot run-as user per org |
+| Area                      | What you get                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **SFDX project skeleton** | `sfdx-project.json`, `force-app/`, `config/`, `.forceignore`, namespace-ready packaged plugin dependencies                                                                                                                                                                                                                                                   |
+| **CI/CD pipeline**        | Modular GitLab pipeline split across `.gitlab/workflows/` (base templates, core jobs, test/quality, maintenance, and per-org files under `orgs/`)                                                                                                                                                                                                            |
+| **Deployment scripting**  | `scripts/bash/` for delta package generation, incremental deploy, destroy, rollback, sandbox refresh, branch back-merge, Slack status posting, etc.                                                                                                                                                                                                          |
+| **Reusable manifests**    | Pre-made `package.xml` files in `scripts/packages/` (Apex, Automation, Bots, Objects, Security & Access, UI, etc.) for retrieves and targeted deploys                                                                                                                                                                                                        |
+| **Static analysis**       | PMD rulesets (`scripts/pmd/enforced` + `scripts/pmd/encouraged`) and a SonarQube config (`sonar-project.properties`)                                                                                                                                                                                                                                         |
+| **Quality tooling**       | ESLint, Prettier (with Apex + XML plugins), Husky pre-commit hooks, lint-staged, Jest (LWC). Formatting `.cls`/`.trigger` files via `prettier-plugin-apex` requires a local Java installation (`JAVA_HOME` set or `java` on `PATH`) - not needed to just run the CI pipeline, only for `npm run prettier`/`prettier:verify` and the pre-commit hook locally. |
+| **Docker**                | `Dockerfile` (Linux, built/pushed by the GitLab `build` job) and `Dockerfile.windows` (Windows Server Core, for Windows-based runners e.g. Bamboo - build/push it yourself, not wired into GitLab CI here) for a pipeline runner image that ships with `sf`, the plugins below, and OS deps                                                                  |
+| **Einstein Bot support**  | `sfdx-project.json` `replacements` and `scripts/replacementFiles/` for swapping the bot run-as user per org                                                                                                                                                                                                                                                  |
 
 ## Salesforce CLI Plugins
 
@@ -89,7 +89,7 @@ build -> maintenance -> test -> quality -> destroy -> deploy
 ### Build Stage
 
 - **Docker image build** (`build`) - rebuilds and pushes the runner image when `Dockerfile` or `.dockerignore` changes on a direct push to an org branch (`develop`, `fullqa`, `main`). Tags the image with the branch slug; a push to `main` also tags as `production`.
-    - Optionally, you can define specific GitLab scheduled pipelines to re-build the Docker image on each org branch if you would like to update the Salesforce CLI and plugins to the latest versions on specific schedules. Create a scheduled pipeline for each org branch and set a job variable to `$JOB_NAME=dockerBuild` to trigger scheduled Docker container builds.
+  - Optionally, you can define specific GitLab scheduled pipelines to re-build the Docker image on each org branch if you would like to update the Salesforce CLI and plugins to the latest versions on specific schedules. Create a scheduled pipeline for each org branch and set a job variable to `$JOB_NAME=dockerBuild` to trigger scheduled Docker container builds.
 
 ### Maintenance Stage (Optional Ad-Hoc Jobs)
 
@@ -119,27 +119,28 @@ Runs weekly on a scheduled pipeline. For each configured team, the `sf-git-ai-me
 
 **Required CI/CD variables:**
 
-| Variable | Purpose |
-| --- | --- |
+| Variable               | Purpose                                                                                                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `METADATA_AUDIT_TEAMS` | Space-separated list of teams to audit. Each entry is `team` or `team:jira-regex`. When no colon is given the team name is used as the commit-message filter. Example: `backend frontend:fe- platform` |
-| `CONFLUENCE_USER` | Confluence username (email) |
-| `CONFLUENCE_TOKEN` | Confluence API token |
-| `CONFLUENCE_PAGE_ID` | ID of the Confluence page to attach summaries to |
-| `CONFLUENCE_BASE_URL` | Confluence base URL, e.g. `https://yourorg.atlassian.net` |
+| `CONFLUENCE_USER`      | Confluence username (email)                                                                                                                                                                            |
+| `CONFLUENCE_TOKEN`     | Confluence API token                                                                                                                                                                                   |
+| `CONFLUENCE_PAGE_ID`   | ID of the Confluence page to attach summaries to                                                                                                                                                       |
+| `CONFLUENCE_BASE_URL`  | Confluence base URL, e.g. `https://yourorg.atlassian.net`                                                                                                                                              |
+
 The plugin (`sf-git-ai-meta-insights`) auto-detects the LLM provider from environment variables. Set credentials for whichever provider you use:
 
-| Provider | Credential env var(s) | Default model |
-| --- | --- | --- |
-| `openai` | `OPENAI_API_KEY` or `LLM_API_KEY` | `gpt-4o-mini` |
-| `openai-compatible` | `LLM_BASE_URL` (required); `LLM_DEFAULT_HEADERS` (optional) | `gpt-4o-mini` |
-| `anthropic` | `ANTHROPIC_API_KEY` | `claude-3-5-haiku-latest` |
-| `google` | `GOOGLE_GENERATIVE_AI_API_KEY` or `GOOGLE_API_KEY` | `gemini-2.0-flash` |
-| `bedrock` | Standard AWS credential chain (env / profile / role) | `anthropic.claude-3-5-haiku-20241022-v1:0` |
-| `mistral` | `MISTRAL_API_KEY` | `mistral-small-latest` |
-| `cohere` | `COHERE_API_KEY` | `command-r-08-2024` |
-| `groq` | `GROQ_API_KEY` | `llama-3.1-8b-instant` |
-| `xai` | `XAI_API_KEY` | `grok-2-latest` |
-| `deepseek` | `DEEPSEEK_API_KEY` | `deepseek-chat` |
+| Provider            | Credential env var(s)                                       | Default model                              |
+| ------------------- | ----------------------------------------------------------- | ------------------------------------------ |
+| `openai`            | `OPENAI_API_KEY` or `LLM_API_KEY`                           | `gpt-4o-mini`                              |
+| `openai-compatible` | `LLM_BASE_URL` (required); `LLM_DEFAULT_HEADERS` (optional) | `gpt-4o-mini`                              |
+| `anthropic`         | `ANTHROPIC_API_KEY`                                         | `claude-3-5-haiku-latest`                  |
+| `google`            | `GOOGLE_GENERATIVE_AI_API_KEY` or `GOOGLE_API_KEY`          | `gemini-2.0-flash`                         |
+| `bedrock`           | Standard AWS credential chain (env / profile / role)        | `anthropic.claude-3-5-haiku-20241022-v1:0` |
+| `mistral`           | `MISTRAL_API_KEY`                                           | `mistral-small-latest`                     |
+| `cohere`            | `COHERE_API_KEY`                                            | `command-r-08-2024`                        |
+| `groq`              | `GROQ_API_KEY`                                              | `llama-3.1-8b-instant`                     |
+| `xai`               | `XAI_API_KEY`                                               | `grok-2-latest`                            |
+| `deepseek`          | `DEEPSEEK_API_KEY`                                          | `deepseek-chat`                            |
 
 Set `LLM_PROVIDER` to force a specific provider when multiple credentials are present. Set `METADATA_AUDIT_FAIL_ON_ERROR=1` to exit on plugin failure (default: warn and continue).
 
@@ -151,16 +152,16 @@ The job is idempotent — if an open MR from the same source branch into the tar
 
 **Required CI/CD variables:**
 
-| Variable | Purpose |
-| --- | --- |
+| Variable               | Purpose                                                                 |
+| ---------------------- | ----------------------------------------------------------------------- |
 | `MAINTAINER_PAT_VALUE` | GitLab PAT with `api` scope (same token used by other maintenance jobs) |
 
 **Optional CI/CD variables:**
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `AI_AGENT_USERNAME` | `svc-ai-triage-agent` | GitLab username of the AI service account |
-| `AI_AGENT_PROMOTION_TARGETS` | `develop fullqa` | Space-separated list of branches to open companion MRs into |
+| Variable                     | Default               | Purpose                                                     |
+| ---------------------------- | --------------------- | ----------------------------------------------------------- |
+| `AI_AGENT_USERNAME`          | `svc-ai-triage-agent` | GitLab username of the AI service account                   |
+| `AI_AGENT_PROMOTION_TARGETS` | `develop fullqa`      | Space-separated list of branches to open companion MRs into |
 
 Remove this job if you are not using an AI triage agent in your workflow.
 
@@ -184,32 +185,32 @@ Three jobs run here:
 
 Runs on every MR pipeline targeting `main`, `fullqa`, or `develop` (configurable). Checks:
 
-| Check | Default branch MRs | Sandbox MRs |
-| --- | --- | --- |
-| Branch age ≤ 30 days from default branch | ✓ | ✓ |
-| Branch name matches `VALID_BRANCH_PREFIXES` | ✓ | ✓ |
-| No forbidden merges from lower envs into source | ✓ | ✓ |
-| Source branched from main (not from sandbox) | ✓ | ✓ |
-| Merge conflict trial merge vs target | ✓ | — |
-| Apex tests resolved by apextestlist plugin (fails if Apex present with no tests) | ✓ | ✓ |
-| Predeploy validate job passed | ✓ | ✓ |
-| Source SHA merged + deployed to fullqa and develop | ✓ | — |
-| Release branch: per-story deployment verification | ✓ | — |
+| Check                                                                            | Default branch MRs | Sandbox MRs |
+| -------------------------------------------------------------------------------- | ------------------ | ----------- |
+| Branch age ≤ 30 days from default branch                                         | ✓                  | ✓           |
+| Branch name matches `VALID_BRANCH_PREFIXES`                                      | ✓                  | ✓           |
+| No forbidden merges from lower envs into source                                  | ✓                  | ✓           |
+| Source branched from main (not from sandbox)                                     | ✓                  | ✓           |
+| Merge conflict trial merge vs target                                             | ✓                  | —           |
+| Apex tests resolved by apextestlist plugin (fails if Apex present with no tests) | ✓                  | ✓           |
+| Predeploy validate job passed                                                    | ✓                  | ✓           |
+| Source SHA merged + deployed to fullqa and develop                               | ✓                  | —           |
+| Release branch: per-story deployment verification                                | ✓                  | —           |
 
 Results are posted as a structured comment on the MR (previous comments from this script are deleted and replaced on each push).
 
 **Configurable CI/CD variables:**
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `DEV_BRANCH` | `develop` | Name of the dev sandbox branch |
-| `FULLQA_BRANCH` | `fullqa` | Name of the full QA branch |
-| `DEV_DEPLOY_JOB` | `deploy:dev` | GitLab job name for dev deploys |
-| `FULLQA_DEPLOY_JOB` | `deploy:fullqa` | GitLab job name for fullqa deploys |
-| `DEV_PREDEPLOY_JOB` | `test:predeploy:dev` | GitLab job name for dev predeploy validate |
-| `FULLQA_PREDEPLOY_JOB` | `test:predeploy:fullqa` | GitLab job name for fullqa predeploy validate |
-| `PRD_PREDEPLOY_JOB` | `test:predeploy:prd` | GitLab job name for production predeploy validate |
-| `VALID_BRANCH_PREFIXES` | _(unset)_ | Space-separated substrings required in MR source branch names. Leave unset to skip branch name enforcement. |
+| Variable                | Default                 | Purpose                                                                                                     |
+| ----------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `DEV_BRANCH`            | `develop`               | Name of the dev sandbox branch                                                                              |
+| `FULLQA_BRANCH`         | `fullqa`                | Name of the full QA branch                                                                                  |
+| `DEV_DEPLOY_JOB`        | `deploy:dev`            | GitLab job name for dev deploys                                                                             |
+| `FULLQA_DEPLOY_JOB`     | `deploy:fullqa`         | GitLab job name for fullqa deploys                                                                          |
+| `DEV_PREDEPLOY_JOB`     | `test:predeploy:dev`    | GitLab job name for dev predeploy validate                                                                  |
+| `FULLQA_PREDEPLOY_JOB`  | `test:predeploy:fullqa` | GitLab job name for fullqa predeploy validate                                                               |
+| `PRD_PREDEPLOY_JOB`     | `test:predeploy:prd`    | GitLab job name for production predeploy validate                                                           |
+| `VALID_BRANCH_PREFIXES` | _(unset)_               | Space-separated substrings required in MR source branch names. Leave unset to skip branch name enforcement. |
 
 `MAINTAINER_PAT_VALUE` is required — the script uses it to query the GitLab API for pipeline/job status and to post/delete MR comments.
 
@@ -310,10 +311,10 @@ Protect each org branch (`develop`, `fullqa`, `main`) in **Settings → Reposito
 
 Each org has two classes of environment defined in the pipeline:
 
-| Environment | Jobs | Protect? |
-| --- | --- | --- |
-| `dev`, `fullqa`, `production` | deploy, destroy, unit test | Yes — restrict to Maintainers |
-| `validate-dev`, `validate-fullqa`, `validate-production` | validate (MR only) | No — leave open |
+| Environment                                              | Jobs                       | Protect?                      |
+| -------------------------------------------------------- | -------------------------- | ----------------------------- |
+| `dev`, `fullqa`, `production`                            | deploy, destroy, unit test | Yes — restrict to Maintainers |
+| `validate-dev`, `validate-fullqa`, `validate-production` | validate (MR only)         | No — leave open               |
 
 Protect deploy/destroy environments in **Settings → CI/CD → Environments** by setting "Protected" and restricting access to Maintainers or a specific group. This ensures only authorised users can trigger real deployments or destructive operations.
 
@@ -325,37 +326,36 @@ The scripts in `scripts/bash/` are not GitLab-specific - they read from environm
 
 ### Pre-defined GitLab CI/CD Variables
 
-| Variable | Purpose |
-| --- | --- |
-| `$CI_PIPELINE_SOURCE` | `push` triggers a deploy; `merge_request_event` triggers a validate |
-| `$CI_ENVIRONMENT_NAME` | Salesforce org name (scripts treat `production` as production) |
-| `$CI_JOB_STAGE` | `test`, `destroy`, or `deploy` |
-| `$CI_JOB_STATUS` | `success` or `failure` (Slack only) |
-| `$GITLAB_USER_NAME` | user who triggered the pipeline (Slack only) |
-| `$CI_JOB_URL` | URL of the CI job log (Slack only) |
-| `$CI_PROJECT_URL` | base URL of the repo (Slack only) |
-| `$CI_MERGE_REQUEST_TARGET_BRANCH_NAME` | target branch for sfdx-git-delta `--merge-base` on validate pipelines |
-| `$CI_COMMIT_BEFORE_SHA` | base SHA for sfdx-git-delta on push (deploy) pipelines |
-| `$CI_COMMIT_MESSAGE` | merge commit message (Slack "Triggered by:" parsing; also matched by scheduled metadata-retrieval jobs) |
+| Variable                               | Purpose                                                                                                 |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `$CI_PIPELINE_SOURCE`                  | `push` triggers a deploy; `merge_request_event` triggers a validate                                     |
+| `$CI_ENVIRONMENT_NAME`                 | Salesforce org name (scripts treat `production` as production)                                          |
+| `$CI_JOB_STAGE`                        | `test`, `destroy`, or `deploy`                                                                          |
+| `$CI_JOB_STATUS`                       | `success` or `failure` (Slack only)                                                                     |
+| `$GITLAB_USER_NAME`                    | user who triggered the pipeline (Slack only)                                                            |
+| `$CI_JOB_URL`                          | URL of the CI job log (Slack only)                                                                      |
+| `$CI_PROJECT_URL`                      | base URL of the repo (Slack only)                                                                       |
+| `$CI_MERGE_REQUEST_TARGET_BRANCH_NAME` | target branch for sfdx-git-delta `--merge-base` on validate pipelines                                   |
+| `$CI_COMMIT_BEFORE_SHA`                | base SHA for sfdx-git-delta on push (deploy) pipelines                                                  |
+| `$CI_COMMIT_MESSAGE`                   | merge commit message (Slack "Triggered by:" parsing; also matched by scheduled metadata-retrieval jobs) |
 
 ### Custom CI/CD Variables
 
-| Variable | Purpose |
-| --- | --- |
-| `$DEPLOY_PACKAGE` | path to the deployment package generated at runtime (default: `package/package.xml`) |
-| `$DEPLOY_TIMEOUT` | `sf` wait time in minutes for deploys/retrieves |
-| `$DESTRUCTIVE_TESTS` | space-separated Apex test classes to run when destroying Apex in production — pipeline fails if unset and package contains Apex |
-| `$AUTH_ALIAS` | unique authorization alias per org |
-| `$AUTH_URL` | unique SFDX auth URL per org (`sf org login sfdx-url` value) |
-| `$SLACK_WEBHOOK_URL` | Slack webhook for status posts; leave empty to disable |
-| `$RUNNER_TAG` | GitLab runner tag applied to all jobs via the `default:` block |
-| `$DEV_ORG_URL` | display URL for the dev sandbox environment (cosmetic, shown in GitLab environments) |
-| `$FULLQA_ORG_URL` | display URL for the full QA sandbox environment |
-| `$PRODUCTION_ORG_URL` | display URL for the production environment |
-| `$VALID_BRANCH_PREFIXES` | space-separated substrings required in MR source branch names; `pre-merge-check` fails branches that match none. Leave empty to skip enforcement. |
-| `$CONFLUENCE_BASE_URL` | Confluence base URL for `metadataAudit` job (e.g. `https://yourorg.atlassian.net`) |
-| `$MAINTAINER_PAT_NAME` / `$MAINTAINER_PAT_USER_NAME` / `$MAINTAINER_PAT_VALUE` | project access token used by maintenance jobs that push to the repo |
-| `$OWNER_PAT_VALUE` | project/group access token with the **Owner** role and `api` scope, used by the `pipelineCleanup` job to delete old pipelines via the GitLab REST API - `Maintainer`-scoped tokens (e.g. `$MAINTAINER_PAT_VALUE`) cannot delete pipelines |
-| `$DO_NOT_REFRESH` | Comma-separated list of protected sandboxes which shouldn't be refreshed via the sandboxRefresh pipeline |
-| `$QUICK_DEPLOY` | Set to `"true"` to use validate-then-quick-deploy for production Apex pushes (faster Apex compilation). Recommended for large orgs. Default: `"false"` (direct deploy with tests). |
-
+| Variable                                                                       | Purpose                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$DEPLOY_PACKAGE`                                                              | path to the deployment package generated at runtime (default: `package/package.xml`)                                                                                                                                                      |
+| `$DEPLOY_TIMEOUT`                                                              | `sf` wait time in minutes for deploys/retrieves                                                                                                                                                                                           |
+| `$DESTRUCTIVE_TESTS`                                                           | space-separated Apex test classes to run when destroying Apex in production — pipeline fails if unset and package contains Apex                                                                                                           |
+| `$AUTH_ALIAS`                                                                  | unique authorization alias per org                                                                                                                                                                                                        |
+| `$AUTH_URL`                                                                    | unique SFDX auth URL per org (`sf org login sfdx-url` value)                                                                                                                                                                              |
+| `$SLACK_WEBHOOK_URL`                                                           | Slack webhook for status posts; leave empty to disable                                                                                                                                                                                    |
+| `$RUNNER_TAG`                                                                  | GitLab runner tag applied to all jobs via the `default:` block                                                                                                                                                                            |
+| `$DEV_ORG_URL`                                                                 | display URL for the dev sandbox environment (cosmetic, shown in GitLab environments)                                                                                                                                                      |
+| `$FULLQA_ORG_URL`                                                              | display URL for the full QA sandbox environment                                                                                                                                                                                           |
+| `$PRODUCTION_ORG_URL`                                                          | display URL for the production environment                                                                                                                                                                                                |
+| `$VALID_BRANCH_PREFIXES`                                                       | space-separated substrings required in MR source branch names; `pre-merge-check` fails branches that match none. Leave empty to skip enforcement.                                                                                         |
+| `$CONFLUENCE_BASE_URL`                                                         | Confluence base URL for `metadataAudit` job (e.g. `https://yourorg.atlassian.net`)                                                                                                                                                        |
+| `$MAINTAINER_PAT_NAME` / `$MAINTAINER_PAT_USER_NAME` / `$MAINTAINER_PAT_VALUE` | project access token used by maintenance jobs that push to the repo                                                                                                                                                                       |
+| `$OWNER_PAT_VALUE`                                                             | project/group access token with the **Owner** role and `api` scope, used by the `pipelineCleanup` job to delete old pipelines via the GitLab REST API - `Maintainer`-scoped tokens (e.g. `$MAINTAINER_PAT_VALUE`) cannot delete pipelines |
+| `$DO_NOT_REFRESH`                                                              | Comma-separated list of protected sandboxes which shouldn't be refreshed via the sandboxRefresh pipeline                                                                                                                                  |
+| `$QUICK_DEPLOY`                                                                | Set to `"true"` to use validate-then-quick-deploy for production Apex pushes (faster Apex compilation). Recommended for large orgs. Default: `"false"` (direct deploy with tests).                                                        |

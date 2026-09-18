@@ -29,11 +29,11 @@ A **Salesforce DX (SFDX) metadata repository** deployed via **GitLab CI/CD** acr
 
 ## Branching & environment model
 
-| Environment | Purpose | Branch | Deployment Trigger |
-|------------|--------|--------|--------------------|
+| Environment  | Purpose     | Branch    | Deployment Trigger |
+| ------------ | ----------- | --------- | ------------------ |
 | Dev (Shared) | Integration | `develop` | Merge to `develop` |
-| QA / UAT | Validation | `fullqa` | Merge to `fullqa` |
-| Production | Live | `main` | Merge to `main` |
+| QA / UAT     | Validation  | `fullqa`  | Merge to `fullqa`  |
+| Production   | Live        | `main`    | Merge to `main`    |
 
 ### Promotion flow (required)
 
@@ -120,7 +120,7 @@ scripts/
 
 - Salesforce CLI (`sf`) with plugins: sfdx-git-delta (`>= 7.3.0`, needs `--merge-base`), apex-code-coverage-transformer, sf-package-list, apextestlist (`>= 1.15.0`, needs `--fail-on-empty`)
 - GitLab CI runners (Docker-based, image defined in `Dockerfile`)
-- Pre-commit hooks (lint-staged: ESLint + Prettier, including Apex/XML plugins)
+- Pre-commit hooks (lint-staged: ESLint + Prettier, including Apex/XML plugins) - `prettier-plugin-apex` requires Java (`JAVA_HOME` or `java` on `PATH`) to format `.cls`/`.trigger` files locally
 
 ---
 
