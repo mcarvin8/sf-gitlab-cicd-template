@@ -19,7 +19,7 @@ jobs:
         uses: peter-evans/dockerhub-description@v5
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
           repository: mcarvin8/sf-cli
           readme-filepath: DOCKER_README.md
           short-description: Salesforce CLI (sf) preinstalled, for Salesforce CI/CD pipelines
