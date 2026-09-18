@@ -1,0 +1,25 @@
+name: Sync Docker Hub README
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'DOCKER_README.md'
+      - '.github/workflows/sync-docker-readme.yml'
+
+jobs:
+  sync-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: mcarvin8/sf-cli
+          readme-filepath: DOCKER_README.md
+          short-description: ${{ github.event.repository.description }}
