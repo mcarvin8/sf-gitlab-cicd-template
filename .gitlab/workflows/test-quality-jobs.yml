@@ -1,6 +1,6 @@
 ####################################################
 # Test and Quality Jobs
-# Unit testing, PMD code analysis, and SonarQube quality gates
+# Unit testing, Salesforce Code Analyzer (PMD engine), and SonarQube quality gates
 ####################################################
 
 ####################################################
@@ -39,18 +39,17 @@
     - source ./scripts/bash/post_test_result.sh; share_slack_update_build
 
 ####################################################
-# Scan changed Apex with PMD.
+# Scan changed Apex with Salesforce Code Analyzer (PMD engine).
+# Runs on the default pipeline image (sf CLI is already installed there);
+# Java and the Code Analyzer/sf-cat plugins are installed at runtime.
 ####################################################
-pmd-code-check:
-  image: eclipse-temurin:17
+code-analyzer-check:
   stage: quality
   allow_failure: true
   cache: []
   variables:
-    PMD_VERSION: "7.16.0"
-    PMD_APEX_ROOT_DIRECTORY: "${CI_PROJECT_DIR}"
-    RULESET_FILES: "scripts/pmd/enforced/default_apex.xml,scripts/pmd/encouraged/require_cmt_switch.xml"
-    PMD_REPORT: "pmd-report.xml"
+    CODE_ANALYZER_REPORT: "code-analyzer-report.json"
+    SONAR_ISSUES_REPORT: "sonar-issues.json"
   rules:
     - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'develop' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == $CI_DEFAULT_BRANCH
       when: never
@@ -62,14 +61,30 @@ pmd-code-check:
     - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'fullQualityCodeScan'
       when: always
   script:
-    - apt-get update && apt-get install -y unzip curl
-    - curl -fL -o pmd-dist.zip https://github.com/pmd/pmd/releases/download/pmd_releases/${PMD_VERSION}/pmd-dist-${PMD_VERSION}-bin.zip
-    - unzip -q pmd-dist.zip
-    - pmd-bin-${PMD_VERSION}/bin/pmd check -d "force-app/main/default/classes" -d "force-app/main/default/triggers" -R "${RULESET_FILES}" -f xml -r "${PMD_REPORT}" --no-cache --no-fail-on-error --no-fail-on-violation
+    # Java is required by the PMD engine; not present in the node:22-bookworm-slim base image.
+    - apt-get update && apt-get install -y openjdk-17-jre-headless
+    - sf plugins install code-analyzer@latest
+    - echo y | sf plugins install sf-cat@latest
+    # Code Analyzer tags every rule declared in a custom ruleset with the
+    # ruleset's own `name` attribute (spaces stripped) -- default_apex.xml's
+    # <ruleset name="Enforced Apex Rules"> becomes the "EnforcedApexRules" tag.
+    # sf code-analyzer errors hard if a --target path doesn't exist (unlike the
+    # old pmd binary), so force-app/main/default/triggers/ must always exist --
+    # see PlaceholderTrigger.trigger.
+    - >
+      sf code-analyzer run
+      --target "force-app/main/default/classes"
+      --target "force-app/main/default/triggers"
+      --rule-selector "pmd:EnforcedApexRules"
+      --config-file code-analyzer.yml
+      --output-file "${CODE_ANALYZER_REPORT}"
+      --view detail
+    # Translate Code Analyzer's own JSON schema into SonarQube's generic issue import format.
+    - sf cat transform -i "${CODE_ANALYZER_REPORT}" -f sonar -o "${SONAR_ISSUES_REPORT}" --project-relative
   artifacts:
     paths:
-      - pmd-report.xml
-      - coverage-sonar.xml
+      - "${CODE_ANALYZER_REPORT}"
+      - "${SONAR_ISSUES_REPORT}"
     expire_in: 2 weeks
 
 ####################################################
@@ -94,12 +109,12 @@ quality:
       variables:
         SONAR_REF: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
       when: always
-      needs: ['pmd-code-check']
+      needs: ['code-analyzer-check']
     - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'fullQualityCodeScan'
       when: always
       variables:
         SONAR_REF: $CI_COMMIT_REF_NAME
-      needs: ['pmd-code-check']
+      needs: ['code-analyzer-check']
     - when: never
   allow_failure: true
   variables:
@@ -117,14 +132,14 @@ quality:
           -Dsonar.gitlab.ref_name=$SONAR_REF \
           -Dsonar.gitlab.commit_sha=$CI_COMMIT_SHORT_SHA \
           -Dsonar.coverageReportPaths=coverage-sonar.xml \
-          -Dsonar.apex.pmd.reportPaths=pmd-report.xml
+          -Dsonar.externalIssuesReportPaths=sonar-issues.json
       else
         sonar-scanner \
           -Dsonar.qualitygate.wait=$SONAR_GATE \
           -Dsonar.projectKey=$CI_PROJECT_PATH_SLUG \
           -Dsonar.gitlab.ref_name=$SONAR_REF \
           -Dsonar.gitlab.commit_sha=$CI_COMMIT_SHORT_SHA \
-          -Dsonar.apex.pmd.reportPaths=pmd-report.xml
+          -Dsonar.externalIssuesReportPaths=sonar-issues.json
       fi
 
 ####################################################

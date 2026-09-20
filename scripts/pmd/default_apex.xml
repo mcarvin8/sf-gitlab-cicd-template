@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ruleset xmlns="http://pmd.sourceforge.net/ruleset/2.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="Default ruleset used by the CodeClimate Engine for Salesforce.com Apex" xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 http://pmd.sourceforge.net/ruleset_2_0_0.xsd">
-   <description>Default ruleset used by the Code Climate Engine for Salesforce.com Apex</description>
+<ruleset xmlns="http://pmd.sourceforge.net/ruleset/2.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="Enforced Apex Rules" xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 http://pmd.sourceforge.net/ruleset_2_0_0.xsd">
+   <description>Enforced PMD ruleset for Salesforce Apex. Code Analyzer tags every rule declared here "EnforcedApexRules" (the ruleset name minus spaces), which is what the CI job's --rule-selector targets.</description>
    <exclude-pattern>.*/.sfdx/.*</exclude-pattern>
 
    <rule ref="category/apex/bestpractices.xml/ApexUnitTestClassShouldHaveAsserts" message="Apex unit test classes should have at least one System.assert() or assertEquals() or AssertNotEquals() call">
@@ -14,7 +14,7 @@
    </rule>
    <rule ref="category/apex/bestpractices.xml/UnusedLocalVariable" />
    <rule ref="category/apex/design.xml/UnusedMethod" />
-   <rule ref="category/apex/bestpractices.xml/AvoidHardcodingId" message="Hardcoded Salesforce IDs will break when deployed to a different org">
+   <rule ref="category/apex/errorprone.xml/AvoidHardcodingId" message="Hardcoded Salesforce IDs will break when deployed to a different org">
       <priority>3</priority>
    </rule>
    <rule ref="category/apex/security.xml/ApexCRUDViolation" message="Enforce CRUD/FLS checks before DML or SOQL">
@@ -38,7 +38,7 @@
    <rule ref="category/apex/security.xml/ApexBadCrypto" message="Avoid hardcoded cryptographic keys or non-random IVs">
       <priority>3</priority>
    </rule>
-   <rule ref="category/apex/security.xml/ApexCSRF" message="Avoid performing DML in a class constructor">
+   <rule ref="category/apex/errorprone.xml/ApexCSRF" message="Avoid performing DML in a class constructor">
       <priority>3</priority>
    </rule>
    <rule ref="category/apex/security.xml/ApexInsecureEndpoint" message="Avoid http:// endpoints; use https://">
@@ -50,10 +50,7 @@
    <rule ref="category/apex/security.xml/ApexSuggestUsingNamedCred" message="Prefer Named Credentials over hardcoded endpoint credentials">
       <priority>3</priority>
    </rule>
-   <rule ref="category/apex/performance.xml/AvoidSoqlInLoops" message="Avoid SOQL queries inside loops to prevent hitting governor limits">
-      <priority>3</priority>
-   </rule>
-   <rule ref="category/apex/performance.xml/AvoidDmlStatementsInLoops" message="Avoid DML statements inside loops to prevent hitting governor limits">
+   <rule ref="category/apex/performance.xml/OperationWithLimitsInLoop" message="Avoid SOQL queries, DML statements, and other governor-limited operations inside loops">
       <priority>3</priority>
    </rule>
    <rule ref="category/apex/errorprone.xml/EmptyCatchBlock" message="Avoid empty catch blocks; they silently swallow errors">

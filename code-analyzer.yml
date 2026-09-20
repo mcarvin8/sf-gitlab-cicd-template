@@ -1,0 +1,32 @@
+# ======================================================================
+# Salesforce Code Analyzer configuration.
+# https://developer.salesforce.com/docs/platform/salesforce-code-analyzer/guide/config-custom.html
+# ======================================================================
+engines:
+  pmd:
+    # Existing enforced PMD ruleset, which applies message/priority overrides
+    # to a curated set of built-in Apex rules. Code Analyzer auto-tags every
+    # rule declared in a custom ruleset with the ruleset's own `name` attribute
+    # (spaces stripped) -- this file's <ruleset name="Enforced Apex Rules">
+    # becomes the "EnforcedApexRules" tag, which the CI job's --rule-selector
+    # targets directly (see code-analyzer-check in
+    # .gitlab/workflows/test-quality-jobs.yml).
+    custom_rulesets:
+      - "./scripts/pmd/default_apex.xml"
+  # Code Analyzer initializes every engine at startup regardless of
+  # --rule-selector, and hard-fails if an engine's runtime dependency is
+  # missing (e.g. flow needs Python, apexguru needs an authenticated org).
+  # Disable everything but pmd to match the old PMD-only job and avoid
+  # installing runtimes we don't use.
+  cpd:
+    disable_engine: true
+  eslint:
+    disable_engine: true
+  retire-js:
+    disable_engine: true
+  flow:
+    disable_engine: true
+  sfge:
+    disable_engine: true
+  apexguru:
+    disable_engine: true
