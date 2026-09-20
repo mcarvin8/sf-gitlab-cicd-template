@@ -15,16 +15,16 @@ engines:
       - "./scripts/pmd/default_apex.xml"
   # Code Analyzer initializes every engine at startup regardless of
   # --rule-selector, and hard-fails if an engine's runtime dependency is
-  # missing (e.g. flow needs Python, apexguru needs an authenticated org).
-  # Disable everything but pmd to match the old PMD-only job and avoid
-  # installing runtimes we don't use.
+  # missing. pmd (Java) and flow (Python) are installed at runtime in
+  # code-analyzer-check; the rest need dependencies this pipeline doesn't
+  # install (eslint/retire-js need a real npm project, sfge is a heavy
+  # 10-30min data-flow scan, apexguru needs an authenticated org), so
+  # they're disabled to match the old PMD-only job's scope.
   cpd:
     disable_engine: true
   eslint:
     disable_engine: true
   retire-js:
-    disable_engine: true
-  flow:
     disable_engine: true
   sfge:
     disable_engine: true

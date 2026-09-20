@@ -39,9 +39,9 @@
     - source ./scripts/bash/post_test_result.sh; share_slack_update_build
 
 ####################################################
-# Scan changed Apex with Salesforce Code Analyzer (PMD engine).
+# Scan changed Apex and Flows with Salesforce Code Analyzer (PMD + Flow engines).
 # Runs on the default pipeline image (sf CLI is already installed there);
-# Java and the Code Analyzer/sf-cat plugins are installed at runtime.
+# Java, Python, and the Code Analyzer/sf-cat plugins are installed at runtime.
 ####################################################
 code-analyzer-check:
   stage: quality
@@ -55,27 +55,30 @@ code-analyzer-check:
       when: never
     - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'develop'
       changes:
-        - 'force-app/main/default/classes/*.cls'
-        - 'force-app/main/default/triggers/*.trigger'
+        - "force-app/main/default/classes/*.cls"
+        - "force-app/main/default/triggers/*.trigger"
+        - "force-app/main/default/flows/*.flow-meta.xml"
       when: always
     - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'fullQualityCodeScan'
       when: always
   script:
-    # Java is required by the PMD engine; not present in the node:22-bookworm-slim base image.
-    - apt-get update && apt-get install -y openjdk-17-jre-headless
+    # Java is required by the PMD engine, Python by the Flow engine; neither
+    # is present in the node:22-bookworm-slim base image.
+    - apt-get update && apt-get install -y openjdk-17-jre-headless python3
     - sf plugins install code-analyzer@latest
     - echo y | sf plugins install sf-cat@latest
     # Code Analyzer tags every rule declared in a custom ruleset with the
     # ruleset's own `name` attribute (spaces stripped) -- default_apex.xml's
     # <ruleset name="Enforced Apex Rules"> becomes the "EnforcedApexRules" tag.
     # sf code-analyzer errors hard if a --target path doesn't exist (unlike the
-    # old pmd binary), so force-app/main/default/triggers/ must always exist --
-    # see PlaceholderTrigger.trigger.
+    # old pmd binary), so classes/triggers/flows must always exist -- see
+    # PlaceholderTrigger.trigger and Placeholder.flow-meta.xml.
     - >
       sf code-analyzer run
       --target "force-app/main/default/classes"
       --target "force-app/main/default/triggers"
-      --rule-selector "pmd:EnforcedApexRules"
+      --target "force-app/main/default/flows"
+      --rule-selector "pmd:EnforcedApexRules,flow:Recommended"
       --config-file code-analyzer.yml
       --output-file "${CODE_ANALYZER_REPORT}"
       --view detail
@@ -104,25 +107,25 @@ quality:
       when: never
     - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'develop'
       changes:
-        - 'force-app/main/default/classes/*.cls'
-        - 'force-app/main/default/triggers/*.trigger'
+        - "force-app/main/default/classes/*.cls"
+        - "force-app/main/default/triggers/*.trigger"
       variables:
         SONAR_REF: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
       when: always
-      needs: ['code-analyzer-check']
+      needs: ["code-analyzer-check"]
     - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'fullQualityCodeScan'
       when: always
       variables:
         SONAR_REF: $CI_COMMIT_REF_NAME
-      needs: ['code-analyzer-check']
+      needs: ["code-analyzer-check"]
     - when: never
   allow_failure: true
   variables:
-    SONAR_USER_HOME: '${CI_PROJECT_DIR}/.sonar'
-    GIT_DEPTH: '0'
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
+    GIT_DEPTH: "0"
     SONAR_LOGIN: $SONAR_TOKEN
     SONAR_HOST_URL: $SONAR_URL
-    SONAR_GATE: 'false'
+    SONAR_GATE: "false"
   script:
     - |
       if [ -f coverage-sonar.xml ]; then
