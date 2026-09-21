@@ -21,7 +21,7 @@ test:postrun:prd:
       when: delayed
       start_in: 90 minutes
     - when: never
-  needs: ['test:unit:prd']
+  needs: ["test:unit:prd"]
   variables:
     AUTH_ALIAS: PRODUCTION
     AUTH_URL: $PRODUCTION_AUTH_URL

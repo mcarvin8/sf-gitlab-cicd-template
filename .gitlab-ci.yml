@@ -17,14 +17,14 @@ default:
 # Include pipeline workflow files.
 ####################################################
 include:
-  - local: '.gitlab/workflows/base-templates.yml'
-  - local: '.gitlab/workflows/core-jobs.yml'
-  - local: '.gitlab/workflows/test-quality-jobs.yml'
-  - local: '.gitlab/workflows/maintenance-pipeline.yml'
+  - local: ".gitlab/workflows/base-templates.yml"
+  - local: ".gitlab/workflows/core-jobs.yml"
+  - local: ".gitlab/workflows/test-quality-jobs.yml"
+  - local: ".gitlab/workflows/maintenance-pipeline.yml"
   # Org-specific job definitions — add, rename, or remove files under orgs/
-  - local: '.gitlab/workflows/orgs/dev.yml'
-  - local: '.gitlab/workflows/orgs/fullqa.yml'
-  - local: '.gitlab/workflows/orgs/production.yml'
+  - local: ".gitlab/workflows/orgs/dev.yml"
+  - local: ".gitlab/workflows/orgs/fullqa.yml"
+  - local: ".gitlab/workflows/orgs/production.yml"
 
 ####################################################
 # Pipeline stages (sequential order; jobs within a stage run in parallel).

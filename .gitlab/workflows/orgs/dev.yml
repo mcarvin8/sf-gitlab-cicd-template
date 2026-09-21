@@ -21,7 +21,7 @@ test:postrun:dev:
       when: delayed
       start_in: 90 minutes
     - when: never
-  needs: ['test:unit:dev']
+  needs: ["test:unit:dev"]
   variables:
     AUTH_ALIAS: DEV
     AUTH_URL: $DEV_AUTH_URL

@@ -8,37 +8,41 @@
   "namespace": "",
   "sfdcLoginUrl": "https://login.salesforce.com",
   "plugins": {
-    "dependencies": [
-      { "namespace": "myManagedPackageNamespace" }
-    ]
+    "dependencies": [{ "namespace": "myManagedPackageNamespace" }]
   },
   "replacements": [
     {
       "glob": "force-app/main/default/bots/**/*.bot-meta.xml",
       "regexToReplace": "<botUser>.*?</botUser>",
       "replaceWithFile": "scripts/replacementFiles/devBotUser.txt",
-      "replaceWhenEnv": [{
-        "env": "AUTH_ALIAS",
-        "value": "SANDBOX"
-      }] 
+      "replaceWhenEnv": [
+        {
+          "env": "AUTH_ALIAS",
+          "value": "SANDBOX"
+        }
+      ]
     },
     {
       "glob": "force-app/main/default/bots/**/*.bot-meta.xml",
       "regexToReplace": "<botUser>.*?</botUser>",
       "replaceWithFile": "scripts/replacementFiles/fqaBotUser.txt",
-      "replaceWhenEnv": [{
-        "env": "AUTH_ALIAS",
-        "value": "FULLQA"
-      }] 
+      "replaceWhenEnv": [
+        {
+          "env": "AUTH_ALIAS",
+          "value": "FULLQA"
+        }
+      ]
     },
     {
       "glob": "force-app/main/default/bots/**/*.bot-meta.xml",
       "regexToReplace": "<botUser>.*?</botUser>",
       "replaceWithFile": "scripts/replacementFiles/prdBotUser.txt",
-      "replaceWhenEnv": [{
-        "env": "AUTH_ALIAS",
-        "value": "PRODUCTION"
-      }] 
+      "replaceWhenEnv": [
+        {
+          "env": "AUTH_ALIAS",
+          "value": "PRODUCTION"
+        }
+      ]
     }
   ]
 }

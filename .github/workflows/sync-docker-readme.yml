@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'DOCKER_README.md'
-      - '.github/workflows/sync-docker-readme.yml'
+      - "DOCKER_README.md"
+      - ".github/workflows/sync-docker-readme.yml"
 
 jobs:
   sync-readme:

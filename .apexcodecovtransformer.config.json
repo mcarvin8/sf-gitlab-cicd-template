@@ -1,7 +1,6 @@
 {
-    "deployCoverageJsonPath": "coverage/coverage/coverage.json",
-    "testCoverageJsonPath": "coverage/test-result-codecoverage.json",
-    "outputReportPath": "coverage.xml",
-    "format": "sonar,cobertura,html"
+  "deployCoverageJsonPath": "coverage/coverage/coverage.json",
+  "testCoverageJsonPath": "coverage/test-result-codecoverage.json",
+  "outputReportPath": "coverage.xml",
+  "format": "sonar,cobertura,html"
 }
-
