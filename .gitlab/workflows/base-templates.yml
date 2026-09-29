@@ -9,7 +9,7 @@
 ####################################################
 .authenticate:
   before_script:
-    - echo $AUTH_URL | sf org login sfdx-url --set-default --alias $AUTH_ALIAS --sfdx-url-stdin
+    - sf org login jwt --client-id "$AUTH_CLIENT_ID" --jwt-key-file "$AUTH_JWT_KEY_FILE" --username "$AUTH_USERNAME" --instance-url "$AUTH_INSTANCE_URL" --set-default --alias "$AUTH_ALIAS"
 
 ####################################################
 # Prepare a deploy/validate job: generate delta package from sfdx-git-delta,

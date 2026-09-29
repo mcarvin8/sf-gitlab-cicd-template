@@ -1,7 +1,7 @@
 ####################################################
 # FullQA Org Jobs
 # All deployment jobs for the full QA (sandbox) environment.
-# Set FULLQA_ORG_URL, FULLQA_AUTH_URL as CI/CD variables in your project.
+# Set FULLQA_ORG_URL and the FULLQA_JWT_* / FULLQA_USERNAME / FULLQA_INSTANCE_URL variables in GitLab.
 ####################################################
 
 test:unit:fullqa:
@@ -12,7 +12,10 @@ test:unit:fullqa:
     - when: never
   variables:
     AUTH_ALIAS: FULLQA
-    AUTH_URL: $FULLQA_AUTH_URL
+    AUTH_CLIENT_ID: $FULLQA_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $FULLQA_JWT_KEY
+    AUTH_USERNAME: $FULLQA_USERNAME
+    AUTH_INSTANCE_URL: $FULLQA_INSTANCE_URL
 
 test:postrun:fullqa:
   extends: .test-postrun
@@ -24,7 +27,10 @@ test:postrun:fullqa:
   needs: ["test:unit:fullqa"]
   variables:
     AUTH_ALIAS: FULLQA
-    AUTH_URL: $FULLQA_AUTH_URL
+    AUTH_CLIENT_ID: $FULLQA_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $FULLQA_JWT_KEY
+    AUTH_USERNAME: $FULLQA_USERNAME
+    AUTH_INSTANCE_URL: $FULLQA_INSTANCE_URL
 
 test:predeploy:fullqa:
   image: $CI_REGISTRY_IMAGE:$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
@@ -39,7 +45,10 @@ test:predeploy:fullqa:
   allow_failure: false
   variables:
     AUTH_ALIAS: FULLQA
-    AUTH_URL: $FULLQA_AUTH_URL
+    AUTH_CLIENT_ID: $FULLQA_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $FULLQA_JWT_KEY
+    AUTH_USERNAME: $FULLQA_USERNAME
+    AUTH_INSTANCE_URL: $FULLQA_INSTANCE_URL
   environment:
     name: validate-fullqa
     url: $FULLQA_ORG_URL
@@ -59,7 +68,10 @@ deploy:fullqa:
   allow_failure: false
   variables:
     AUTH_ALIAS: FULLQA
-    AUTH_URL: $FULLQA_AUTH_URL
+    AUTH_CLIENT_ID: $FULLQA_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $FULLQA_JWT_KEY
+    AUTH_USERNAME: $FULLQA_USERNAME
+    AUTH_INSTANCE_URL: $FULLQA_INSTANCE_URL
   environment:
     name: fullqa
     url: $FULLQA_ORG_URL
@@ -77,7 +89,10 @@ destroy:fullqa:
   allow_failure: false
   variables:
     AUTH_ALIAS: FULLQA
-    AUTH_URL: $FULLQA_AUTH_URL
+    AUTH_CLIENT_ID: $FULLQA_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $FULLQA_JWT_KEY
+    AUTH_USERNAME: $FULLQA_USERNAME
+    AUTH_INSTANCE_URL: $FULLQA_INSTANCE_URL
   environment:
     name: fullqa
     url: $FULLQA_ORG_URL
@@ -97,7 +112,10 @@ destroy:fullqa:push:
   allow_failure: true
   variables:
     AUTH_ALIAS: FULLQA
-    AUTH_URL: $FULLQA_AUTH_URL
+    AUTH_CLIENT_ID: $FULLQA_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $FULLQA_JWT_KEY
+    AUTH_USERNAME: $FULLQA_USERNAME
+    AUTH_INSTANCE_URL: $FULLQA_INSTANCE_URL
   environment:
     name: fullqa
     url: $FULLQA_ORG_URL

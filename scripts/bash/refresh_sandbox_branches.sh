@@ -4,9 +4,8 @@
 # Description: Performs sandbox refresh operations:
 #              1. Creates backup tags from DEV_BRANCH and FULLQA_BRANCH branches
 #              2. Deletes DEV_BRANCH and FULLQA_BRANCH protected branches
-#              3. Clears DEV_AUTH_URL_VAR and FULLQA_AUTH_URL_VAR CI/CD variables
-#              4. Recreates FULLQA_BRANCH from CI_DEFAULT_BRANCH
-#              5. Recreates DEV_BRANCH from FULLQA_BRANCH
+#              3. Recreates FULLQA_BRANCH from CI_DEFAULT_BRANCH
+#              4. Recreates DEV_BRANCH from FULLQA_BRANCH
 # Usage:
 #   ./refresh_sandbox_branches.sh
 # Environment Variables Required:
@@ -17,7 +16,6 @@
 #   - CI_COMMIT_SHORT_SHA: used when cleaning up local branches after recreation
 # Configurable (with defaults):
 #   DEV_BRANCH (develop), FULLQA_BRANCH (fullqa)
-#   DEV_AUTH_URL_VAR (DEV_AUTH_URL), FULLQA_AUTH_URL_VAR (FULLQA_AUTH_URL)
 ################################################################################
 
 set -e
@@ -60,8 +58,6 @@ check_required_var "CI_SERVER_HOST"
 # Configurable branch and CI/CD variable names
 DEV_BRANCH="${DEV_BRANCH:-develop}"
 FULLQA_BRANCH="${FULLQA_BRANCH:-fullqa}"
-DEV_AUTH_URL_VAR="${DEV_AUTH_URL_VAR:-DEV_AUTH_URL}"
-FULLQA_AUTH_URL_VAR="${FULLQA_AUTH_URL_VAR:-FULLQA_AUTH_URL}"
 
 # Determine project ID and ensure CI_PROJECT_PATH is set (needed for git operations)
 if [[ -z "$CI_PROJECT_ID" ]]; then
@@ -317,49 +313,6 @@ delete_branch() {
     fi
 }
 
-# Function to update a CI/CD variable
-update_variable() {
-    local var_key=$1
-    local var_value=$2
-    
-    print_info "Updating CI/CD variable: $var_key"
-    
-    local response=$(curl -s -w "\n%{http_code}" --request PUT \
-        --header "PRIVATE-TOKEN: ${MAINTAINER_PAT_VALUE}" \
-        --header "Content-Type: application/json" \
-        --data "{\"key\":\"${var_key}\",\"value\":\"${var_value}\"}" \
-        "${API_BASE}/variables/${var_key}")
-    
-    local http_code=$(echo "$response" | tail -n1)
-    local body=$(echo "$response" | sed '$d')
-    
-    if [[ "$http_code" == "200" ]]; then
-        print_info "Successfully updated variable: $var_key"
-        return 0
-    elif [[ "$http_code" == "404" ]]; then
-        print_warn "Variable '$var_key' does not exist. Creating it."
-        # Try to create the variable
-        local create_response=$(curl -s -w "\n%{http_code}" --request POST \
-            --header "PRIVATE-TOKEN: ${MAINTAINER_PAT_VALUE}" \
-            --header "Content-Type: application/json" \
-            --data "{\"key\":\"${var_key}\",\"value\":\"${var_value}\"}" \
-            "${API_BASE}/variables")
-        
-        local create_code=$(echo "$create_response" | tail -n1)
-        if [[ "$create_code" == "201" ]]; then
-            print_info "Successfully created variable: $var_key"
-            return 0
-        else
-            print_error "Failed to create variable '$var_key'. HTTP $create_code"
-            return 1
-        fi
-    else
-        print_error "Failed to update variable '$var_key'. HTTP $http_code"
-        echo "$body" | head -20
-        return 1
-    fi
-}
-
 # Function to recreate a branch from another branch
 recreate_branch() {
     local new_branch=$1
@@ -437,14 +390,8 @@ FULLQA_PROTECTION_RULES=""
 delete_branch "$DEV_BRANCH" "DEVELOP_PROTECTION_RULES"
 delete_branch "$FULLQA_BRANCH" "FULLQA_PROTECTION_RULES"
 
-# Step 3: Clear CI/CD variables
-print_info "=== Step 3: Clearing CI/CD variables ==="
-
-update_variable "$FULLQA_AUTH_URL_VAR" ""
-update_variable "$DEV_AUTH_URL_VAR" ""
-
-# Step 4: Recreate FULLQA_BRANCH from CI_DEFAULT_BRANCH
-print_info "=== Step 4: Recreating $FULLQA_BRANCH branch from ${CI_DEFAULT_BRANCH:-main} ==="
+# Step 3: Recreate FULLQA_BRANCH from CI_DEFAULT_BRANCH
+print_info "=== Step 3: Recreating $FULLQA_BRANCH branch from ${CI_DEFAULT_BRANCH:-main} ==="
 
 recreate_branch "$FULLQA_BRANCH" "${CI_DEFAULT_BRANCH:-main}"
 
@@ -458,8 +405,8 @@ else
     print_warn "FULLQA_PROTECTION_RULES variable is empty"
 fi
 
-# Step 5: Recreate DEV_BRANCH from FULLQA_BRANCH
-print_info "=== Step 5: Recreating $DEV_BRANCH branch from $FULLQA_BRANCH ==="
+# Step 4: Recreate DEV_BRANCH from FULLQA_BRANCH
+print_info "=== Step 4: Recreating $DEV_BRANCH branch from $FULLQA_BRANCH ==="
 
 recreate_branch "$DEV_BRANCH" "$FULLQA_BRANCH"
 

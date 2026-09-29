@@ -1,7 +1,7 @@
 ####################################################
 # Dev Org Jobs
 # All deployment jobs for the development (DEV) environment.
-# Set DEV_ORG_URL, DEV_AUTH_URL as CI/CD variables in your project.
+# Set DEV_ORG_URL and the DEV_JWT_* / DEV_USERNAME / DEV_INSTANCE_URL variables in GitLab.
 ####################################################
 
 test:unit:dev:
@@ -12,7 +12,10 @@ test:unit:dev:
     - when: never
   variables:
     AUTH_ALIAS: DEV
-    AUTH_URL: $DEV_AUTH_URL
+    AUTH_CLIENT_ID: $DEV_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $DEV_JWT_KEY
+    AUTH_USERNAME: $DEV_USERNAME
+    AUTH_INSTANCE_URL: $DEV_INSTANCE_URL
 
 test:postrun:dev:
   extends: .test-postrun
@@ -24,7 +27,10 @@ test:postrun:dev:
   needs: ["test:unit:dev"]
   variables:
     AUTH_ALIAS: DEV
-    AUTH_URL: $DEV_AUTH_URL
+    AUTH_CLIENT_ID: $DEV_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $DEV_JWT_KEY
+    AUTH_USERNAME: $DEV_USERNAME
+    AUTH_INSTANCE_URL: $DEV_INSTANCE_URL
 
 test:predeploy:dev:
   image: $CI_REGISTRY_IMAGE:$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
@@ -39,7 +45,10 @@ test:predeploy:dev:
   allow_failure: false
   variables:
     AUTH_ALIAS: DEV
-    AUTH_URL: $DEV_AUTH_URL
+    AUTH_CLIENT_ID: $DEV_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $DEV_JWT_KEY
+    AUTH_USERNAME: $DEV_USERNAME
+    AUTH_INSTANCE_URL: $DEV_INSTANCE_URL
   environment:
     name: validate-dev
     url: $DEV_ORG_URL
@@ -59,7 +68,10 @@ deploy:dev:
   allow_failure: false
   variables:
     AUTH_ALIAS: DEV
-    AUTH_URL: $DEV_AUTH_URL
+    AUTH_CLIENT_ID: $DEV_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $DEV_JWT_KEY
+    AUTH_USERNAME: $DEV_USERNAME
+    AUTH_INSTANCE_URL: $DEV_INSTANCE_URL
   environment:
     name: dev
     url: $DEV_ORG_URL
@@ -77,7 +89,10 @@ destroy:dev:
   allow_failure: false
   variables:
     AUTH_ALIAS: DEV
-    AUTH_URL: $DEV_AUTH_URL
+    AUTH_CLIENT_ID: $DEV_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $DEV_JWT_KEY
+    AUTH_USERNAME: $DEV_USERNAME
+    AUTH_INSTANCE_URL: $DEV_INSTANCE_URL
   environment:
     name: dev
     url: $DEV_ORG_URL
@@ -97,7 +112,10 @@ destroy:dev:push:
   allow_failure: true
   variables:
     AUTH_ALIAS: DEV
-    AUTH_URL: $DEV_AUTH_URL
+    AUTH_CLIENT_ID: $DEV_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $DEV_JWT_KEY
+    AUTH_USERNAME: $DEV_USERNAME
+    AUTH_INSTANCE_URL: $DEV_INSTANCE_URL
   environment:
     name: dev
     url: $DEV_ORG_URL

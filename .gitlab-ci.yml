@@ -39,7 +39,7 @@ stages:
 
 ####################################################
 # Global CI/CD variables.
-# Secrets (AUTH_URL, PAT_VALUE, SLACK_WEBHOOK_URL, etc.) are set in
+# Secrets (JWT private keys, PAT_VALUE, SLACK_WEBHOOK_URL, etc.) are set in
 # GitLab project CI/CD variable settings, not here.
 ####################################################
 variables:

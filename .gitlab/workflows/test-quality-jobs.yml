@@ -6,7 +6,7 @@
 ####################################################
 # Base templates for running all local Apex tests on a schedule.
 # Trigger: scheduled pipeline with $JOB_NAME=unitTest on the org branch.
-# Org-specific jobs in orgs/<org>.yml extend these and supply AUTH_URL,
+# Org-specific jobs in orgs/<org>.yml extend these and supply JWT credentials,
 # AUTH_ALIAS, branch rule, and needs reference.
 ####################################################
 .test-unit:
@@ -16,8 +16,9 @@
     paths:
       - test_run_id.txt
     expire_in: 1 day
+  before_script:
+    - !reference [.authenticate, before_script]
   script:
-    - echo $AUTH_URL | sf org login sfdx-url --set-default --alias $AUTH_ALIAS --sfdx-url-stdin
     - sf apex run test --test-level RunLocalTests --result-format human > ./id.txt
     - source ./scripts/bash/extract_test_id.sh
 
@@ -29,9 +30,10 @@
       - coverage-sonar.xml
       - coverage/*
     expire_in: 2 weeks
+  before_script:
+    - !reference [.authenticate, before_script]
   script:
     - TEST_RUN_ID=$(cat test_run_id.txt)
-    - echo $AUTH_URL | sf org login sfdx-url --set-default --alias $AUTH_ALIAS --sfdx-url-stdin
     # set || true so the job passes even if there are test failures
     - sf apex get test --test-run-id $TEST_RUN_ID --code-coverage -r json -d "coverage" > result.json || true
     - source ./scripts/bash/parse_test_result.sh

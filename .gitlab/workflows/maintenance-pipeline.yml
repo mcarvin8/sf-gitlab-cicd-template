@@ -30,8 +30,15 @@ sandboxRefresh:
       when: always
     - when: never
   allow_failure: false
+  before_script:
+    - !reference [.authenticate, before_script]
+  variables:
+    AUTH_ALIAS: PRODUCTION
+    AUTH_CLIENT_ID: $PRODUCTION_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $PRODUCTION_JWT_KEY
+    AUTH_USERNAME: $PRODUCTION_USERNAME
+    AUTH_INSTANCE_URL: $PRODUCTION_INSTANCE_URL
   script:
-    - echo $PRODUCTION_AUTH_URL | sf org login sfdx-url --set-default --alias PRODUCTION --sfdx-url-stdin
     - source ./scripts/bash/create_sandbox.sh
 
 ####################################################
@@ -64,22 +71,31 @@ prodBackfill:
     - when: never
   allow_failure: false
   before_script:
+    - !reference [.authenticate, before_script]
     - npm ci
 
 packageBackfillSbxFullqa:
   extends: .packageBackfillSbxBase
   variables:
     ORG_BRANCH: fullqa
+    AUTH_ALIAS: fullqa
+    AUTH_CLIENT_ID: $FULLQA_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $FULLQA_JWT_KEY
+    AUTH_USERNAME: $FULLQA_USERNAME
+    AUTH_INSTANCE_URL: $FULLQA_INSTANCE_URL
   script:
-    - echo $FULLQA_AUTH_URL | sf org login sfdx-url --set-default --alias fullqa --sfdx-url-stdin
     - source ./scripts/bash/retrieve_packages.sh
 
 packageBackfillSbxDevelop:
   extends: .packageBackfillSbxBase
   variables:
     ORG_BRANCH: develop
+    AUTH_ALIAS: develop
+    AUTH_CLIENT_ID: $DEV_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $DEV_JWT_KEY
+    AUTH_USERNAME: $DEV_USERNAME
+    AUTH_INSTANCE_URL: $DEV_INSTANCE_URL
   script:
-    - echo $DEV_AUTH_URL | sf org login sfdx-url --set-default --alias develop --sfdx-url-stdin
     - source ./scripts/bash/retrieve_packages.sh
 
 packageBackfillPrd:
@@ -90,8 +106,12 @@ packageBackfillPrd:
     - when: never
   variables:
     ORG_BRANCH: $CI_DEFAULT_BRANCH
+    AUTH_ALIAS: $CI_DEFAULT_BRANCH
+    AUTH_CLIENT_ID: $PRODUCTION_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $PRODUCTION_JWT_KEY
+    AUTH_USERNAME: $PRODUCTION_USERNAME
+    AUTH_INSTANCE_URL: $PRODUCTION_INSTANCE_URL
   script:
-    - echo $PRODUCTION_AUTH_URL | sf org login sfdx-url --set-default --alias main --sfdx-url-stdin
     - source ./scripts/bash/retrieve_packages.sh
 
 ####################################################
