@@ -28,6 +28,7 @@ Fork or clone this repository as the starting point for a new SFDX project and y
   - [Destructive Apex Tests](#destructive-apex-tests)
 - [Connected Apps](#connected-apps)
 - [Einstein Bots](#einstein-bots)
+- [Experience Cloud Bundles](#experience-cloud-bundles
 - [Slack Integration](#slack-integration)
 - [Branch Protection](#branch-protection)
 - [Adapting to Other CI/CD Platforms](#adapting-to-other-cicd-platforms)
@@ -294,6 +295,16 @@ To deploy Einstein Bots with this template:
 - update the `replacements` block in `sfdx-project.json` so each org gets the right substitution
 
 > Remove the `replacements` block from `sfdx-project.json` if you aren't deploying bots.
+
+## Experience Cloud Bundles
+
+When deploying Experience Cloud Bundles (`ExperienceBundle`), the deployment can fail with this warning:
+
+```
+The reportId property of component <xxx> references an object with the ID value <yyy>. Occasionally, when deployed to a destination org, ID values can become invalid—for example, if the referenced ID doesn’t exist in the destination org. If you encounter component issues in your destination org, verify that the ID values are correct.
+```
+
+This can occur even if your orgs have the same record IDs or you try deploying the bundle back to the source org. This warning can be ignored by passing `--ignore-warnings` to the `sf project deploy` commands. This flag is included by default in the provided deployment shell script, but could be updated to either remove the flag if you don't deploy experience bundles or if you only want to include the flag if `ExperienceBundle` is found in the SGD-generated manifest.
 
 ## Slack Integration
 
