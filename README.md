@@ -55,7 +55,7 @@ Fork or clone this repository as the starting point for a new SFDX project and y
 
 The model relies on these Salesforce CLI plugins:
 
-1. [sfdx-git-delta](https://github.com/scolladon/sfdx-git-delta) `>= 7.3.0` - generate incremental `package.xml` / `destructiveChanges.xml` from git diffs. `>= 7.3.0` is required for the `--merge-base` flag, which the template uses to diff merge request pipelines from the true merge-base with the target branch.
+1. [sfdx-git-delta](https://github.com/scolladon/sfdx-git-delta) `>= 7.3.0` - generate incremental `package.xml` / `destructiveChanges.xml` from git diffs. `>= 7.3.0` is required for the `--merge-base` flag, which the template uses to diff merge request pipelines from the true merge-base with the target branch. This requries GitLab CI/CD to perform full clones with fetch depth set to 0 to fetch the all branches.
 2. [apex-code-coverage-transformer](https://github.com/mcarvin8/apex-code-coverage-transformer) - convert Salesforce coverage JSON to other formats supported by GitLab, SonarQube, etc.
 3. [sf-package-list](https://github.com/mcarvin8/sf-package-list) - declare metadata in a compact list format and convert to `package.xml`
 4. [apextestlist](https://github.com/wisefoxme/apex-test-list) `>= 1.15.0` - resolve Apex test classes from `@tests:` / `@testsuites:` / `@isTest` annotations. `>= 1.15.0` is required for the `-e/--fail-on-empty` flag, which scans the manifest for `ApexClass`/`ApexTrigger` itself instead of the pipeline needing a separate shell check.
