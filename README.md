@@ -16,7 +16,7 @@ Fork or clone this repository as the starting point for a new SFDX project and y
 - [CI/CD Model](#cicd-model)
 - [Pipeline Stages](#pipeline-stages)
   - [Build Stage](#build-stage)
-  - [Maintenance Stage (Optional Ad-Hoc Jobs)](#maintenance-stage-optional-ad-hoc-jobs)
+  - [Maintenance Stage](#maintenance-stage)
   - [Test Stage](#test-stage)
   - [Quality Stage](#quality-stage)
   - [Destroy Stage](#destroy-stage)
@@ -53,7 +53,7 @@ Fork or clone this repository as the starting point for a new SFDX project and y
 
 ## Salesforce CLI Plugins
 
-The model relies on these Salesforce CLI plugins (I authored items 2-3):
+The model relies on these Salesforce CLI plugins:
 
 1. [sfdx-git-delta](https://github.com/scolladon/sfdx-git-delta) `>= 7.3.0` - generate incremental `package.xml` / `destructiveChanges.xml` from git diffs. `>= 7.3.0` is required for the `--merge-base` flag, which the template uses to diff merge request pipelines from the true merge-base with the target branch.
 2. [apex-code-coverage-transformer](https://github.com/mcarvin8/apex-code-coverage-transformer) - convert Salesforce coverage JSON to other formats supported by GitLab, SonarQube, etc.
@@ -61,6 +61,8 @@ The model relies on these Salesforce CLI plugins (I authored items 2-3):
 4. [apextestlist](https://github.com/wisefoxme/apex-test-list) `>= 1.15.0` - resolve Apex test classes from `@tests:` / `@testsuites:` / `@isTest` annotations. `>= 1.15.0` is required for the `-e/--fail-on-empty` flag, which scans the manifest for `ApexClass`/`ApexTrigger` itself instead of the pipeline needing a separate shell check.
 
 All four are pre-installed in the `Dockerfile`, pinned to those minimum versions with `@^<version>`.
+
+Certain CI/CD jobs install Salesforce CLI plugins at run-time when those plugins are only used for specific jobs, such as `sf-git-ai-meta-insights` for metadata audits and `code-analyzer`/`sf-cat` for code quality merge request scans.
 
 ## Getting Started
 
@@ -94,7 +96,7 @@ build -> maintenance -> test -> quality -> destroy -> deploy
 - **Docker image build** (`build`) - rebuilds and pushes the runner image when `Dockerfile` or `.dockerignore` changes on a direct push to an org branch (`develop`, `fullqa`, `main`). Tags the image with the branch slug; a push to `main` also tags as `production`.
   - Optionally, you can define specific GitLab scheduled pipelines to re-build the Docker image on each org branch if you would like to update the Salesforce CLI and plugins to the latest versions on specific schedules. Create a scheduled pipeline for each org branch and set a job variable to `$JOB_NAME=dockerBuild` to trigger scheduled Docker container builds.
 
-### Maintenance Stage (Optional Ad-Hoc Jobs)
+### Maintenance Stage
 
 `.gitlab/workflows/maintenance-pipeline.yml` defines opt-in utility jobs. Jobs trigger via different sources — web pipelines, scheduled pipelines, push events, or merge request events — depending on their purpose:
 
