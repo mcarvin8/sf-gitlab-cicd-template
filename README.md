@@ -26,9 +26,10 @@ Fork or clone this repository as the starting point for a new SFDX project and y
 - [Declare Specified Apex Tests](#declare-specified-apex-tests)
   - [Validation and Deployment Apex Tests](#validation-and-deployment-apex-tests)
   - [Destructive Apex Tests](#destructive-apex-tests)
-- [Connected Apps](#connected-apps)
-- [Einstein Bots](#einstein-bots)
-- [Experience Cloud Bundles](#experience-cloud-bundles
+- [Metadata Type Notes](#metadata-type-notes)
+  - [Connected Apps](#connected-apps)
+  - [Einstein Bots](#einstein-bots)
+  - [Experience Cloud Bundles](#experience-cloud-bundles)
 - [Slack Integration](#slack-integration)
 - [Branch Protection](#branch-protection)
 - [Adapting to Other CI/CD Platforms](#adapting-to-other-cicd-platforms)
@@ -282,11 +283,13 @@ Destroying Apex in production requires running Apex tests with the destructive d
 
 > Sandboxes do not require destructive tests.
 
-## Connected Apps
+## Metadata Type Notes
+
+### Connected Apps
 
 When a Connected App is in the deployment package, its `<consumerKey>` element is stripped automatically before deploy to avoid Salesforce errors. This is handled inline in the pipeline via `sed`.
 
-## Einstein Bots
+### Einstein Bots
 
 To deploy Einstein Bots with this template:
 
@@ -296,7 +299,7 @@ To deploy Einstein Bots with this template:
 
 > Remove the `replacements` block from `sfdx-project.json` if you aren't deploying bots.
 
-## Experience Cloud Bundles
+### Experience Cloud Bundles
 
 When deploying Experience Cloud Bundles (`ExperienceBundle`), the deployment can fail with this warning:
 
