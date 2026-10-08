@@ -5,6 +5,8 @@
 #              on package type and environment. Validates for non-push pipelines,
 #              uses quick-deploy for production, and direct deployment for other
 #              environments. Handles both Apex and non-Apex packages.
+#              ‑‑ignore‑warnings is required for Experience Bundle deployments as record IDs in
+#              (regardless if record ID matches target org) can cause warnings which by default fail deployments.
 # Usage: Called from CI/CD pipeline during deployment stages
 # Environment Variables Required:
 #   - testclasses: "--tests Class1 --tests Class2 ..." from apextestlist (sf format), or "not a test" for non-Apex packages
@@ -17,9 +19,9 @@ set -e
 # Handle non-Apex packages (no tests)
 if [ "$testclasses" == "not a test" ]; then
     if [ "$CI_PIPELINE_SOURCE" != "push" ]; then
-        sf project deploy start --dry-run -x $DEPLOY_PACKAGE -w $DEPLOY_TIMEOUT --verbose --ignore-conflicts
+        sf project deploy start --dry-run -x $DEPLOY_PACKAGE -w $DEPLOY_TIMEOUT --verbose --ignore-conflicts ‑‑ignore‑warnings
     else
-        sf project deploy start -x $DEPLOY_PACKAGE -w $DEPLOY_TIMEOUT --verbose --ignore-conflicts
+        sf project deploy start -x $DEPLOY_PACKAGE -w $DEPLOY_TIMEOUT --verbose --ignore-conflicts ‑‑ignore‑warnings
     fi
 else
     # Apex package with tests — $testclasses is "--tests Class1 --tests Class2 ..."
@@ -27,13 +29,13 @@ else
         # Always validate on non-push pipelines
         sf project deploy validate -l RunSpecifiedTests $testclasses \
             --coverage-formatters json --results-dir coverage \
-            -x $DEPLOY_PACKAGE -w $DEPLOY_TIMEOUT --verbose
+            -x $DEPLOY_PACKAGE -w $DEPLOY_TIMEOUT --verbose ‑‑ignore‑warnings
     else
         if [ "$CI_ENVIRONMENT_NAME" == "production" ] && [ "$QUICK_DEPLOY" == "true" ]; then
             # Production with QUICK_DEPLOY=true: validate then quick-deploy (faster Apex compilation)
             sf project deploy validate -l RunSpecifiedTests $testclasses \
                 --coverage-formatters json --results-dir coverage \
-                -x $DEPLOY_PACKAGE -w $DEPLOY_TIMEOUT --verbose
+                -x $DEPLOY_PACKAGE -w $DEPLOY_TIMEOUT --verbose ‑‑ignore‑warnings
 
             echo "Running the quick-deployment..."
             sf project deploy quick --use-most-recent -w $DEPLOY_TIMEOUT
@@ -41,7 +43,7 @@ else
             # Other environments: deploy directly with tests
             sf project deploy start -l RunSpecifiedTests $testclasses \
                 --coverage-formatters json --results-dir coverage \
-                -x $DEPLOY_PACKAGE -w $DEPLOY_TIMEOUT --verbose --ignore-conflicts
+                -x $DEPLOY_PACKAGE -w $DEPLOY_TIMEOUT --verbose --ignore-conflicts ‑‑ignore‑warnings
         fi
     fi
 fi
