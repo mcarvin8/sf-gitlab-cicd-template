@@ -4,8 +4,7 @@
 ####################################################
 
 ####################################################
-# Build a Docker image for the org branch.
-# Only runs on push to org branches when the Dockerfile changes.
+# Build a Docker image for all jobs and push it to the GitLab Container Registry.
 ####################################################
 build:
   image: docker:latest
@@ -15,12 +14,12 @@ build:
     - name: docker:dind
       alias: docker
   rules:
-    - if: ($CI_COMMIT_REF_NAME == 'develop' || $CI_COMMIT_REF_NAME == 'fullqa' || $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH) && $CI_PIPELINE_SOURCE == 'push'
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'push'
       changes:
         - Dockerfile
         - .dockerignore
       when: always
-    - if: ($CI_COMMIT_REF_NAME == 'develop' || $CI_COMMIT_REF_NAME == 'fullqa' || $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH) && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'dockerBuild'
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'dockerBuild'
       when: always
   allow_failure: false
   variables:
@@ -33,6 +32,5 @@ build:
     - until docker info; do sleep 1; done
   script:
     - echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER $CI_REGISTRY --password-stdin
-    - if [ $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH ]; then IMAGE_TAG=$CI_REGISTRY_IMAGE:production; fi
     - docker build --tag $IMAGE_TAG .
     - docker push $IMAGE_TAG

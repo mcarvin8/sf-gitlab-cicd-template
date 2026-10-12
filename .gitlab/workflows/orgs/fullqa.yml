@@ -33,7 +33,6 @@ test:postrun:fullqa:
     AUTH_INSTANCE_URL: $FULLQA_INSTANCE_URL
 
 test:predeploy:fullqa:
-  image: $CI_REGISTRY_IMAGE:$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
   extends: .validate-metadata
   stage: test
   resource_group: fullqa
@@ -54,7 +53,6 @@ test:predeploy:fullqa:
     url: $FULLQA_ORG_URL
 
 deploy:fullqa:
-  image: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
   extends: .deploy-metadata
   stage: deploy
   resource_group: fullqa
@@ -77,7 +75,6 @@ deploy:fullqa:
     url: $FULLQA_ORG_URL
 
 destroy:fullqa:
-  image: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
   extends: .delete-metadata
   stage: destroy
   resource_group: fullqa
@@ -98,7 +95,6 @@ destroy:fullqa:
     url: $FULLQA_ORG_URL
 
 destroy:fullqa:push:
-  image: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
   extends: .delete-metadata-push
   stage: destroy
   resource_group: fullqa

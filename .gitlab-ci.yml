@@ -3,7 +3,7 @@
 # Built from the included Dockerfile — swap in your own image that has
 # sf CLI and the five plugins installed (see Dockerfile + README).
 ####################################################
-image: $CI_REGISTRY_IMAGE:production
+image: $CI_REGISTRY_IMAGE:main
 
 ####################################################
 # Default runner tag applied to every job unless overridden.
