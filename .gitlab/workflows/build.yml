@@ -1,9 +1,4 @@
 ####################################################
-# Core Pipeline Jobs
-# Build stage: Docker image build
-####################################################
-
-####################################################
 # Build a Docker image for all jobs and push it to the GitLab Container Registry.
 ####################################################
 build:

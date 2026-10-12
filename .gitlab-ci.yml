@@ -18,7 +18,7 @@ default:
 ####################################################
 include:
   - local: ".gitlab/workflows/base-templates.yml"
-  - local: ".gitlab/workflows/core-jobs.yml"
+  - local: ".gitlab/workflows/build.yml"
   - local: ".gitlab/workflows/test-quality-jobs.yml"
   - local: ".gitlab/workflows/maintenance-pipeline.yml"
   # Org-specific job definitions — add, rename, or remove files under orgs/
