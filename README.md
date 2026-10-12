@@ -88,9 +88,59 @@ Per-org rules are isolated to one YAML file per org under `.gitlab/workflows/org
 
 `BRANCHING_MODEL: "org"` (default). Each Salesforce org has its own long-running git branch (e.g. `develop` -> Dev sandbox, `fullqa` -> Full QA, `main` -> Production). Merge requests targeting an org branch trigger validate jobs against that org; merging into the branch triggers a real deploy. Each story branch is promoted with a separate MR into each org branch.
 
+```mermaid
+gitGraph
+  commit id: "main"
+  branch develop
+  checkout main
+  branch fullqa
+  checkout main
+  branch story/ABC-1
+  commit id: "ABC-1 change"
+  checkout develop
+  merge story/ABC-1 id: "MR into develop" tag: "deploy:dev"
+  checkout fullqa
+  merge story/ABC-1 id: "MR into fullqa" tag: "deploy:fullqa"
+  checkout main
+  merge story/ABC-1 id: "MR into main" tag: "deploy:prd"
+  checkout develop
+  merge main id: "prodBackfill (develop)"
+  checkout fullqa
+  merge main id: "prodBackfill (fullqa)"
+```
+
+1. Branch the story from `main`.
+2. Open an MR from the story branch into `develop`. `test:predeploy:dev` validates against Dev; merging runs `deploy:dev`.
+3. Open a second MR from the **same story branch** into `fullqa`. `test:predeploy:fullqa` validates; merging runs `deploy:fullqa`.
+4. Open a third MR from the same story branch into `main`. `test:predeploy:prd` validates; merging runs `deploy:prd`.
+5. `prodBackfill` merges `main` back into `develop` and `fullqa` so the org branches stay in sync.
+
 ### Release Branching Model
 
 `BRANCHING_MODEL: "release"`. Story branches merge into a short-lived `release/*` branch (e.g. `release/2026.10`) that is cut from `main`; the release branch then merges into `main`.
+
+```mermaid
+gitGraph
+  commit id: "main"
+  branch release/2026.10
+  commit id: "cut release (no deploy)"
+  checkout main
+  branch story/ABC-1
+  commit id: "ABC-1 change"
+  checkout main
+  branch story/ABC-2
+  commit id: "ABC-2 change"
+  checkout release/2026.10
+  merge story/ABC-1 id: "MR ABC-1" tag: "dev auto, fullqa manual"
+  merge story/ABC-2 id: "MR ABC-2" tag: "dev auto, fullqa manual"
+  checkout main
+  merge release/2026.10 id: "MR release into main" tag: "deploy:prd"
+```
+
+1. Cut `release/2026.10` from `main`. The push that creates the branch doesn't deploy.
+2. Branch each story from `main` and open an MR into the release branch. `test:predeploy:dev` and `test:predeploy:fullqa` validate against the sandboxes.
+3. Each merge into the release branch runs `deploy:dev` automatically. After peer review, play `deploy:fullqa` (it waits for `deploy:dev`). Each deploy carries the whole release.
+4. Open an MR from the release branch into `main`. `test:predeploy:prd` validates, and `pre-merge-check` confirms the release HEAD reached Dev and Full QA. Merging runs `deploy:prd`.
 
 | Event                          | Jobs                                                                                                                    |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
