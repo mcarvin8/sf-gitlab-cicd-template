@@ -2,9 +2,18 @@
 
 A batteries-included **Salesforce DX (SFDX) project template** for teams running the **org development model** (long-running branches per org, no scratch orgs or unlocked packages), with an optional **release branching model** (short-lived `release/*` branches deploy to the sandboxes). It is the result of my work building a custom Salesforce CI/CD model on top of the Salesforce CLI (`sf`), a handful of open-source CLI plugins, and a set of reusable shell helpers.
 
-Fork or clone this repository as the starting point for a new SFDX project and you get an opinionated, end-to-end CI/CD setup out of the box - GitLab pipelines, incremental deploys via `sfdx-git-delta`, specified Apex test selection via `apex-test-list`, code quality gates, automated rollbacks, sandbox refresh automation, Slack notifications, Einstein Bot per-org replacements, and more.
+Fork or clone this repository as the starting point for a new SFDX project and you get an opinionated, end-to-end CI/CD setup out of the box:
 
-> The pipeline lives under `.gitlab/workflows/` and is wired up in `.gitlab-ci.yml`. The bash and config that power it all live under `scripts/` and at the repo root. Org-specific values (branch names like `dev`/`fullqa`, environment URLs, runner tags) are configured through CI/CD variables — see [Custom CI/CD Variables](#custom-cicd-variables).
+1. GitLab pipelines
+2. Incremental deploys via `sfdx-git-delta`
+3. Specified Apex test selection via `apex-test-list`
+4. Code quality gates
+5. Automated rollbacks
+6. Sandbox creation and refresh automation
+7. Slack notifications
+8. Metadata-specific handling (i.e. Einstein Bots, Connected Apps, Experience Cloud Sites)
+
+and more!
 
 <!-- TABLE OF CONTENTS -->
 <details>
