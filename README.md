@@ -5,8 +5,8 @@ A batteries-included **Salesforce DX (SFDX) project template** for teams running
 Fork or clone this repository as the starting point for a new SFDX project and you get an opinionated, end-to-end CI/CD setup out of the box:
 
 1. GitLab pipelines
-2. Incremental deploys via `sfdx-git-delta`
-3. Specified Apex test selection via `apex-test-list`
+2. Incremental deployments
+3. Specified Apex test selection
 4. Code quality gates
 5. Automated rollbacks
 6. Sandbox creation and refresh automation
