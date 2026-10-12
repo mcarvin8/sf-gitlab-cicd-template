@@ -2,6 +2,11 @@
 # Dev Org Jobs
 # All deployment jobs for the development (DEV) environment.
 # Set DEV_ORG_URL and the DEV_JWT_* / DEV_USERNAME / DEV_INSTANCE_URL variables in GitLab.
+# Org branching model: the develop branch maps to this org.
+# Release branching model (BRANCHING_MODEL=release): MRs into release/* validate
+# here, and pushes to release/* deploy here automatically. Release deploys diff
+# from the merge-base with the default branch (DELTA_BASE_BRANCH), so each deploy
+# carries the whole release. The release branch's first (creation) push is skipped.
 ####################################################
 
 test:unit:dev:
@@ -41,6 +46,8 @@ test:predeploy:dev:
       when: never
     - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'develop'
       when: manual
+    - if: $BRANCHING_MODEL == 'release' && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^release\//
+      when: manual
   allow_failure: false
   variables:
     AUTH_ALIAS: DEV
@@ -63,6 +70,10 @@ deploy:dev:
       when: never
     - if: $CI_COMMIT_REF_NAME == 'develop' && $CI_PIPELINE_SOURCE == 'push'
       when: always
+    - if: $BRANCHING_MODEL == 'release' && $CI_COMMIT_BRANCH =~ /^release\// && $CI_PIPELINE_SOURCE == 'push' && $CI_COMMIT_BEFORE_SHA != '0000000000000000000000000000000000000000'
+      when: always
+      variables:
+        DELTA_BASE_BRANCH: $CI_DEFAULT_BRANCH
   allow_failure: false
   variables:
     AUTH_ALIAS: DEV
@@ -105,6 +116,10 @@ destroy:dev:push:
       when: never
     - if: $CI_COMMIT_REF_NAME == 'develop' && $CI_PIPELINE_SOURCE == 'push'
       when: always
+    - if: $BRANCHING_MODEL == 'release' && $CI_COMMIT_BRANCH =~ /^release\// && $CI_PIPELINE_SOURCE == 'push' && $CI_COMMIT_BEFORE_SHA != '0000000000000000000000000000000000000000'
+      when: always
+      variables:
+        DELTA_BASE_BRANCH: $CI_DEFAULT_BRANCH
   allow_failure: true
   variables:
     AUTH_ALIAS: DEV

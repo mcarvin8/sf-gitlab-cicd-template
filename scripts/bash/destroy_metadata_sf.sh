@@ -10,12 +10,22 @@
 #   - DEPLOY_PACKAGE: Path to deployment package (pre-destructive changes)
 #   - DESTRUCTIVE_PACKAGE: Path to destructive changes manifest
 #   - DEPLOY_TIMEOUT
+# Optional:
+#   - DELTA_BASE_BRANCH: set on cumulative release-branch destroys (see .delete-metadata-push)
 ################################################################################
 set -e
 
+# Cumulative release-branch destroys re-send components already deleted by an
+# earlier push. Salesforce reports those as "not found" warnings, which fail the
+# whole destructive deploy unless warnings are ignored.
+ignore_warnings=""
+if [ -n "${DELTA_BASE_BRANCH:-}" ]; then
+    ignore_warnings="--ignore-warnings"
+fi
+
 # Destructive apex deployments in production only require tests
 if [ "$testclasses" == "not a test" ]; then
-    sf project deploy start --pre-destructive-changes $DEPLOY_PACKAGE --manifest $DESTRUCTIVE_PACKAGE -w $DEPLOY_TIMEOUT --verbose
+    sf project deploy start --pre-destructive-changes $DEPLOY_PACKAGE --manifest $DESTRUCTIVE_PACKAGE -w $DEPLOY_TIMEOUT --verbose $ignore_warnings
 else
-    sf project deploy start --pre-destructive-changes $DEPLOY_PACKAGE --manifest $DESTRUCTIVE_PACKAGE -l RunSpecifiedTests -t $testclasses -w $DEPLOY_TIMEOUT --verbose
+    sf project deploy start --pre-destructive-changes $DEPLOY_PACKAGE --manifest $DESTRUCTIVE_PACKAGE -l RunSpecifiedTests -t $testclasses -w $DEPLOY_TIMEOUT --verbose $ignore_warnings
 fi

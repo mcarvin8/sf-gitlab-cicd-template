@@ -1,6 +1,6 @@
 # Salesforce DX Project Template - Gitlab CI/CD
 
-A batteries-included **Salesforce DX (SFDX) project template** for teams running the **org development model** (long-running branches per org, no scratch orgs or unlocked packages). It is the result of my work building a custom Salesforce CI/CD model on top of the Salesforce CLI (`sf`), a handful of open-source plugins (several of which I authored), and a set of reusable shell helpers.
+A batteries-included **Salesforce DX (SFDX) project template** for teams running the **org development model** (long-running branches per org, no scratch orgs or unlocked packages), with an optional **release branching model** (short-lived `release/*` branches deploy to the sandboxes). It is the result of my work building a custom Salesforce CI/CD model on top of the Salesforce CLI (`sf`), a handful of open-source plugins (several of which I authored), and a set of reusable shell helpers.
 
 Fork or clone this repository as the starting point for a new SFDX project and you get an opinionated, end-to-end CI/CD setup out of the box - GitLab pipelines, incremental deploys via `sfdx-git-delta`, specified Apex test selection, SonarQube quality gates, rollbacks, sandbox refresh automation, Slack notifications, Einstein Bot per-org replacements, and more.
 
@@ -14,6 +14,8 @@ Fork or clone this repository as the starting point for a new SFDX project and y
 - [Salesforce CLI Plugins](#salesforce-cli-plugins)
 - [Getting Started](#getting-started)
 - [CI/CD Model](#cicd-model)
+  - [Org Branching Model](#org-branching-model)
+  - [Release Branching Model](#release-branching-model)
 - [Pipeline Stages](#pipeline-stages)
   - [Build Stage](#build-stage)
   - [Maintenance Stage](#maintenance-stage)
@@ -78,9 +80,33 @@ Certain CI/CD jobs install Salesforce CLI plugins at run-time when those plugins
 
 ## CI/CD Model
 
-The pipeline in `.gitlab-ci.yml` follows the **org branching model**: each Salesforce org has its own long-running git branch (e.g. `develop` -> Dev sandbox, `fullqa` -> Full QA, `main` -> Production). Merge requests targeting an org branch trigger validate jobs against that org; merging into the branch triggers a real deploy.
+The pipeline supports two branching models, selected with the `BRANCHING_MODEL` global variable in `.gitlab-ci.yml` (`org` by default, or `release`). In both models the default branch (`main`) maps to Production: an MR into `main` validates against Production (`test:predeploy:prd`) and merging into `main` deploys to Production (`deploy:prd`).
 
-Per-org rules are isolated to one YAML file per org under `.gitlab/workflows/orgs/`, so you can customize a branching strategy (one branch per org, MR-to-`main` validates everything, fan-out to multiple orgs, etc.) without touching the shared job templates.
+Per-org rules are isolated to one YAML file per org under `.gitlab/workflows/orgs/`, so you can customize a branching strategy (one branch per org, MR-to-`main` validates everything, fan-out to multiple orgs, etc.) without touching the shared job templates. Both models use the same validate/deploy/destroy jobs; the release model only adds rules to them.
+
+### Org Branching Model
+
+`BRANCHING_MODEL: "org"` (default). Each Salesforce org has its own long-running git branch (e.g. `develop` -> Dev sandbox, `fullqa` -> Full QA, `main` -> Production). Merge requests targeting an org branch trigger validate jobs against that org; merging into the branch triggers a real deploy. Each story branch is promoted with a separate MR into each org branch.
+
+### Release Branching Model
+
+`BRANCHING_MODEL: "release"`. Story branches merge into a short-lived `release/*` branch (e.g. `release/2026.10`) that is cut from `main`; the release branch then merges into `main`.
+
+| Event                          | Jobs                                                                                                                    |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| MR opened into `release/*`     | `test:predeploy:dev` and `test:predeploy:fullqa` (manual validate), `code-analyzer-check`, `quality`, `pre-merge-check` |
+| Push/merge into `release/*`    | `destroy:dev:push` + `deploy:dev` (automatic), then `destroy:fullqa:push` + `deploy:fullqa` (manual)                    |
+| MR opened into `main`          | `test:predeploy:prd` (manual validate), quality jobs, `pre-merge-check`                                                 |
+| Push/merge into `main`         | `destroy:prd:push` + `deploy:prd` (automatic)                                                                           |
+
+- `deploy:fullqa` needs `deploy:dev`, so it can only be played after the same commit deployed to Dev — use the gap for peer review/sign-off. Protect the `fullqa` environment to control who can play it (see [Branch Protection](#branch-protection)).
+- Release sandbox deploys diff from the **merge-base with `main`** (`DELTA_BASE_BRANCH`) instead of `CI_COMMIT_BEFORE_SHA`, so every deploy carries the whole release. Playing the latest pipeline's manual Full QA job deploys everything in the release even if earlier pipelines were never played, and a failed Dev deploy is caught up by the next push. Trade-off: each deploy runs the `@tests:` of every Apex class in the release.
+- Turn on **Settings → CI/CD → General pipelines → Prevent outdated deployment jobs** so an older pipeline's manual Full QA job can't overwrite a newer release deploy.
+- The first push that creates a `release/*` branch is skipped (nothing differs from `main` yet).
+- Reverting a commit on a release branch doesn't restore the sandbox's previous version once the file matches `main` again (it drops out of the cumulative delta) — push a fix forward or redeploy the component instead. The `rollback` job stays on `main` (and the org branches).
+- Org-branch-only jobs are disabled: `packageBackfillSbxDevelop`/`packageBackfillSbxFullqa`, `prodBackfill`, `refreshSbxBranches`, and `agentPromoteMR`.
+
+Release rules match `release/*` branch names; edit the `/^release\//` patterns in the org files and `test-quality-jobs.yml` to use another prefix.
 
 **There is no committed deployment package.xml.** The deployment package is generated on the fly by `sfdx-git-delta` at validate and deploy time — whatever the git diff covers is what gets deployed. See [Declare Metadata to Deploy](#declare-metadata-to-deploy).
 
@@ -195,7 +221,7 @@ Three jobs run here:
 
 #### Pre-Merge Compliance Checks (`verify_branch_compliance.sh`)
 
-Runs on every MR pipeline targeting `main`, `fullqa`, or `develop` (configurable). Checks:
+Runs on every MR pipeline targeting `main`, `fullqa`, or `develop` (configurable), or `release/*` when `BRANCHING_MODEL` is `release` (release MRs are checked as sandbox MRs against `test:predeploy:dev`). Checks:
 
 | Check                                                                            | Default branch MRs | Sandbox MRs |
 | -------------------------------------------------------------------------------- | ------------------ | ----------- |
@@ -206,8 +232,9 @@ Runs on every MR pipeline targeting `main`, `fullqa`, or `develop` (configurable
 | Merge conflict trial merge vs target                                             | ✓                  | —           |
 | Apex tests resolved by apextestlist plugin (fails if Apex present with no tests) | ✓                  | ✓           |
 | Predeploy validate job passed                                                    | ✓                  | ✓           |
-| Source SHA merged + deployed to fullqa and develop                               | ✓                  | —           |
-| Release branch: per-story deployment verification                                | ✓                  | —           |
+| Source SHA merged + deployed to fullqa and develop (org model)                   | ✓                  | —           |
+| Release branch: per-story deployment verification (org model)                    | ✓                  | —           |
+| Source SHA deployed by `deploy:dev` and `deploy:fullqa` (release model)          | ✓                  | —           |
 
 Results are posted as a structured comment on the MR (previous comments from this script are deleted and replaced on each push).
 
@@ -235,7 +262,7 @@ Removes metadata from the target org. Two flavors are supported:
 
 ### Deploy Stage
 
-Deploys constructive metadata to the target org once an MR merges to the org branch. One deploy job per org. `sfdx-git-delta` generates the incremental package from `CI_COMMIT_BEFORE_SHA` to `HEAD`, printed in list format via `sf-package-list` before deployment.
+Deploys constructive metadata to the target org once an MR merges to the org branch. One deploy job per org. `sfdx-git-delta` generates the incremental package from `CI_COMMIT_BEFORE_SHA` to `HEAD` (or from the merge-base with `main` on `release/*` branches — see [Release Branching Model](#release-branching-model)), printed in list format via `sf-package-list` before deployment.
 
 ## Declare Metadata to Deploy
 
@@ -326,7 +353,7 @@ Leave the variable empty or remove it to disable Slack notifications.
 
 **Branches**
 
-Protect each org branch (`develop`, `fullqa`, `main`) in **Settings → Repository → Protected branches**:
+Protect each org branch (`develop`, `fullqa`, `main`) — or `main` and the `release/*` wildcard in the release branching model — in **Settings → Repository → Protected branches**:
 
 - Set "Allowed to merge" to Maintainers (or a custom role) to prevent direct deploys without review
 - Enable "Pipelines must succeed" in **Settings → Merge requests** to block merges until the validate job passes
@@ -367,6 +394,8 @@ The scripts in `scripts/bash/` are not GitLab-specific - they read from environm
 
 | Variable                                                                       | Purpose                                                                                                                                                                                                                                   |
 | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$BRANCHING_MODEL`                                                             | `org` (default, long-running org branches) or `release` (short-lived `release/*` branches deploy to the sandboxes) — see [CI/CD Model](#cicd-model)                                                                                      |
+| `$DELTA_BASE_BRANCH`                                                           | set by release-model rules (to the default branch) so push deploys/destroys diff from the merge-base with that branch instead of `CI_COMMIT_BEFORE_SHA`; not meant to be set globally                                                    |
 | `$DEPLOY_PACKAGE`                                                              | path to the deployment package generated at runtime (default: `package/package.xml`)                                                                                                                                                      |
 | `$DEPLOY_TIMEOUT`                                                              | `sf` wait time in minutes for deploys/retrieves                                                                                                                                                                                           |
 | `$DESTRUCTIVE_TESTS`                                                           | space-separated Apex test classes to run when destroying Apex in production — pipeline fails if unset and package contains Apex                                                                                                           |

@@ -7,6 +7,10 @@
 #                release-branch per-story deployment verification.
 #              - Lower-env MRs: lineage + package + predeploy for that org only
 #                (no merge-conflict trial merge; no lower-env deploy gates).
+#              - BRANCHING_MODEL=release: release/* MRs are lower-env MRs (dev
+#                predeploy); default-branch MRs verify the source HEAD was deployed
+#                by DEV_DEPLOY_JOB and FULLQA_DEPLOY_JOB on its release push pipeline
+#                instead of checking develop/fullqa branch merges.
 #
 # Usage: Sourced from GitLab CI (pre-merge-check jobs).
 # Dependencies: git, curl, jq (optional)
@@ -16,6 +20,7 @@
 #                    CI_DEFAULT_BRANCH
 #
 # Configurable (with defaults):
+#   BRANCHING_MODEL (org)
 #   DEV_BRANCH (develop), FULLQA_BRANCH (fullqa)
 #   DEV_DEPLOY_JOB (deploy:dev), FULLQA_DEPLOY_JOB (deploy:fullqa)
 #   DEV_PREDEPLOY_JOB (test:predeploy:dev), FULLQA_PREDEPLOY_JOB (test:predeploy:fullqa)
@@ -61,6 +66,7 @@ check_required_var "MAINTAINER_PAT_VALUE"
 check_required_var "CI_DEFAULT_BRANCH"
 
 # Configurable org branch and job names — override via CI/CD variables if your orgs differ
+BRANCHING_MODEL="${BRANCHING_MODEL:-org}"
 DEV_BRANCH="${DEV_BRANCH:-develop}"
 FULLQA_BRANCH="${FULLQA_BRANCH:-fullqa}"
 DEV_DEPLOY_JOB="${DEV_DEPLOY_JOB:-deploy:dev}"
@@ -69,11 +75,16 @@ DEV_PREDEPLOY_JOB="${DEV_PREDEPLOY_JOB:-test:predeploy:dev}"
 FULLQA_PREDEPLOY_JOB="${FULLQA_PREDEPLOY_JOB:-test:predeploy:fullqa}"
 PRD_PREDEPLOY_JOB="${PRD_PREDEPLOY_JOB:-test:predeploy:prd}"
 
-# Only run for MRs targeting default branch, fullqa, or develop
+# Only run for MRs targeting default branch, fullqa, or develop (or release/* in the release branching model)
+IS_RELEASE_TARGET=false
+if [[ "$BRANCHING_MODEL" == "release" && "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" == release/* ]]; then
+    IS_RELEASE_TARGET=true
+fi
 if [[ "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" != "$CI_DEFAULT_BRANCH" && \
       "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" != "$FULLQA_BRANCH" && \
-      "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" != "$DEV_BRANCH" ]]; then
-    print_status "$YELLOW" "Skipping: MR target is not default branch, $FULLQA_BRANCH, or $DEV_BRANCH ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME)"
+      "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" != "$DEV_BRANCH" && \
+      "$IS_RELEASE_TARGET" != "true" ]]; then
+    print_status "$YELLOW" "Skipping: MR target is not default branch, $FULLQA_BRANCH, $DEV_BRANCH, or release/* ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME)"
     exit 0
 fi
 
@@ -88,14 +99,16 @@ case "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" in
     "$CI_DEFAULT_BRANCH") PREDEPLOY_JOB_NAME="$PRD_PREDEPLOY_JOB" ;;
     "$FULLQA_BRANCH")     PREDEPLOY_JOB_NAME="$FULLQA_PREDEPLOY_JOB" ;;
     "$DEV_BRANCH")        PREDEPLOY_JOB_NAME="$DEV_PREDEPLOY_JOB" ;;
+    release/*)            PREDEPLOY_JOB_NAME="$DEV_PREDEPLOY_JOB" ;;
     *)                    PREDEPLOY_JOB_NAME="$PRD_PREDEPLOY_JOB" ;;
 esac
 
 if [[ "$MR_MODE" == "main" ]]; then
     print_status "$GREEN" "Starting branch deployment verification (default branch MR)..."
 else
-    print_status "$GREEN" "Starting MR branch compliance (fullqa/develop MR)..."
+    print_status "$GREEN" "Starting MR branch compliance (sandbox MR)..."
 fi
+print_status "$YELLOW" "Branching model: $BRANCHING_MODEL"
 print_status "$YELLOW" "Source branch: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
 print_status "$YELLOW" "Target branch: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
 print_status "$YELLOW" "Merge Request IID: $CI_MERGE_REQUEST_IID"
@@ -685,7 +698,9 @@ check_deployment_job_status() {
     fi
 }
 
-if [[ "$MR_MODE" == "main" ]]; then
+# Release branching model: there are no develop/fullqa branches to check; the
+# release HEAD's own deploy jobs are verified below instead.
+if [[ "$MR_MODE" == "main" && "$BRANCHING_MODEL" != "release" ]]; then
     print_status "$YELLOW" "Checking fullqa branch..."
     FULLQA_RESULT=$(check_branch_merged "$FULLQA_BRANCH" "$SOURCE_BRANCH_SHA")
     FULLQA_EXISTS=$(echo "$FULLQA_RESULT" | cut -d'|' -f1)
@@ -725,6 +740,21 @@ elif [[ "$PREDEPLOY_STATUS" == "api_error" ]]; then
     print_status "$YELLOW" "⚠ Predeploy validation ($PREDEPLOY_JOB_NAME) - API error"
 else
     print_status "$YELLOW" "? Predeploy validation ($PREDEPLOY_JOB_NAME) status unknown ($PREDEPLOY_STATUS)"
+fi
+
+# Release branching model: default-branch MRs come from a release/* branch whose
+# push pipeline deploys the whole release (delta from the merge-base with the
+# default branch) to dev automatically and fullqa manually. Verify both deploy
+# jobs succeeded for the exact source commit being merged.
+RELEASE_DEV_DEPLOY_STATUS=""
+RELEASE_FULLQA_DEPLOY_STATUS=""
+if [[ "$MR_MODE" == "main" && "$BRANCHING_MODEL" == "release" ]]; then
+    print_status "$YELLOW" "Checking $DEV_DEPLOY_JOB for source branch commit (release branching model)..."
+    RELEASE_DEV_DEPLOY_STATUS=$(check_deployment_job_status "$SOURCE_BRANCH_SHA" "$DEV_DEPLOY_JOB" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST_CLEAN")
+    print_status "$YELLOW" "  $DEV_DEPLOY_JOB status: $RELEASE_DEV_DEPLOY_STATUS"
+    print_status "$YELLOW" "Checking $FULLQA_DEPLOY_JOB for source branch commit (release branching model)..."
+    RELEASE_FULLQA_DEPLOY_STATUS=$(check_deployment_job_status "$SOURCE_BRANCH_SHA" "$FULLQA_DEPLOY_JOB" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST_CLEAN")
+    print_status "$YELLOW" "  $FULLQA_DEPLOY_JOB status: $RELEASE_FULLQA_DEPLOY_STATUS"
 fi
 
 # Function to find commits with successful deploy jobs
@@ -928,7 +958,8 @@ parse_merge_subject() {
     echo "${story}|${release}"
 }
 
-if [[ "$MR_MODE" == "main" ]]; then
+# Org branching model only: per-story checks look for develop/fullqa deploys.
+if [[ "$MR_MODE" == "main" && "$BRANCHING_MODEL" != "release" ]]; then
     RELEASE_DETECT_BASE="${BRANCH_MERGE_BASE_SHA:-${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}}"
 
     if [[ -n "$RELEASE_DETECT_BASE" ]]; then
@@ -1236,7 +1267,44 @@ else
     COMMENT_BODY+="- :warning: **Package.xml Compliance**: Check status unknown"$'\n'
 fi
 
-if [[ "$MR_MODE" == "main" ]]; then
+# Release branching model: report the release HEAD's own sandbox deploys
+append_release_deploy_line() {
+    local env_name=$1
+    local job_name=$2
+    local job_status=$3
+
+    case "$job_status" in
+        success)
+            COMMENT_BODY+="- :white_check_mark: **$env_name**: Source commit deployed successfully (\`$job_name\`)"$'\n'
+            print_status "$GREEN" "✓ $env_name: Source commit deployed successfully"
+            ;;
+        failed)
+            COMMENT_BODY+="- :x: **$env_name**: Deployment failed (\`$job_name\`)"$'\n'
+            print_status "$RED" "✗ $env_name: Deployment failed"
+            ;;
+        running|pending)
+            COMMENT_BODY+="- :hourglass: **$env_name**: Deployment in progress (\`$job_name\`)"$'\n'
+            print_status "$YELLOW" "⏳ $env_name: Deployment in progress"
+            ;;
+        manual|created|skipped|canceled)
+            COMMENT_BODY+="- :x: **$env_name**: Source commit not deployed (\`$job_name\` is $job_status)"$'\n'
+            print_status "$RED" "✗ $env_name: Source commit not deployed ($job_status)"
+            ;;
+        job_not_found|no_pipeline)
+            COMMENT_BODY+="- :warning: **$env_name**: No \`$job_name\` job found for the source commit (push a commit to the release branch to create one)"$'\n'
+            print_status "$YELLOW" "⚠ $env_name: No $job_name job found for source commit"
+            ;;
+        *)
+            COMMENT_BODY+="- :question: **$env_name**: Deployment status unknown (${job_status:-?})"$'\n'
+            print_status "$YELLOW" "? $env_name: Deployment status unknown"
+            ;;
+    esac
+}
+
+if [[ "$MR_MODE" == "main" && "$BRANCHING_MODEL" == "release" ]]; then
+    append_release_deploy_line "dev" "$DEV_DEPLOY_JOB" "$RELEASE_DEV_DEPLOY_STATUS"
+    append_release_deploy_line "fullqa" "$FULLQA_DEPLOY_JOB" "$RELEASE_FULLQA_DEPLOY_STATUS"
+elif [[ "$MR_MODE" == "main" ]]; then
 if [[ "$FULLQA_EXISTS" == "true" ]]; then
     if [[ "$FULLQA_MERGED" == "true" ]]; then
         if [[ "$FULLQA_DEPLOY_STATUS" == "success" ]]; then
@@ -1507,7 +1575,13 @@ else
 fi
 
 print_status "$GREEN" "\n=== Verification Summary ==="
-if [[ "$MR_MODE" == "main" ]]; then
+if [[ "$MR_MODE" == "main" && "$BRANCHING_MODEL" == "release" ]]; then
+    if [[ "$RELEASE_DEV_DEPLOY_STATUS" == "success" && "$RELEASE_FULLQA_DEPLOY_STATUS" == "success" ]]; then
+        print_status "$GREEN" "✓ Source commit deployed successfully to dev and fullqa"
+    else
+        print_status "$YELLOW" "⚠ Source commit is not yet deployed successfully to both dev and fullqa"
+    fi
+elif [[ "$MR_MODE" == "main" ]]; then
     RELEASE_HEAD_DEPLOYED=false
     if [[ "$FULLQA_EXISTS" == "true" && "$FULLQA_MERGED" == "true" && "$FULLQA_DEPLOY_STATUS" == "success" ]] && \
        [[ "$DEVELOP_EXISTS" == "true" && "$DEVELOP_MERGED" == "true" && "$DEVELOP_DEPLOY_STATUS" == "success" ]]; then

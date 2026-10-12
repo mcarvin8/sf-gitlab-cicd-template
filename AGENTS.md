@@ -23,7 +23,8 @@ A **Salesforce DX (SFDX) metadata repository** deployed via **GitLab CI/CD** acr
   - All non-test Apex classes and triggers must have a valid `@tests:` annotation
 
 - **Promotion-based delivery model**
-  - The same story branch is promoted across environments via separate MRs
+  - The same story branch is promoted across environments via separate MRs (org branching model, the default)
+  - Optional release branching model (`BRANCHING_MODEL: "release"` in `.gitlab-ci.yml`) — see below
 
 ---
 
@@ -44,6 +45,19 @@ story branch → develop → fullqa → main
 - **Three MRs per change are required**
 - Each MR must originate from the **same story branch**
 - Do not rely on branch-to-branch merges for promotion
+
+### Release branching model (when `BRANCHING_MODEL` is `release`)
+
+```
+story branch → release/* → main
+```
+
+- `release/*` branches are cut from `main` and are short-lived
+- MR into `release/*` → manual validate against Dev and Full QA (`test:predeploy:dev` / `test:predeploy:fullqa`)
+- Push to `release/*` → `deploy:dev` runs automatically; `deploy:fullqa` is manual and waits for `deploy:dev`
+- Release sandbox deploys diff from the merge-base with `main`, so each one carries the whole release
+- MR `release/*` → `main` validates against production; merge deploys to production
+- `develop`/`fullqa` branches and their backfill/refresh jobs are not used
 
 ---
 

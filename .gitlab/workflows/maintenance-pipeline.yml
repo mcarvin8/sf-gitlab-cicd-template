@@ -45,12 +45,13 @@ sandboxRefresh:
 # Push production commits back to sandbox branches.
 # This will skip CI pipelines when pushing to GitLab.
 # Allowed to fail in order to not block a production pipeline.
+# Org branching model only.
 ####################################################
 prodBackfill:
   stage: maintenance
   cache: []
   rules:
-    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'push'
+    - if: $BRANCHING_MODEL != 'release' && $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'push'
       when: always
     - when: never
   allow_failure: true
@@ -61,12 +62,14 @@ prodBackfill:
 # Retrieve metadata from sandboxes into GitLab branches (parallel: one job per branch).
 # $PACKAGE_NAME must be set (file under scripts/packages). Same schedule as before
 # ($JOB_NAME == sbxBackfill); both jobs run together and do not share git state.
+# Sandbox backfills are org branching model only; packageBackfillPrd overrides
+# these rules and runs in both models.
 ####################################################
 .packageBackfillSbxBase:
   stage: maintenance
   cache: []
   rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $PACKAGE_NAME && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'sbxBackfill'
+    - if: $BRANCHING_MODEL != 'release' && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $PACKAGE_NAME && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'sbxBackfill'
       when: always
     - when: never
   allow_failure: false
@@ -162,12 +165,13 @@ metadataAudit:
 
 ####################################################
 # Executes GitLab sandbox refresh steps.
+# Org branching model only (recreates the develop/fullqa org branches).
 ####################################################
 refreshSbxBranches:
   stage: maintenance
   cache: []
   rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'refreshSbxBranches'
+    - if: $BRANCHING_MODEL != 'release' && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'refreshSbxBranches'
       when: always
     - when: never
   allow_failure: false
@@ -180,12 +184,13 @@ refreshSbxBranches:
 # this job opens the two companion MRs (story -> develop, story -> fullqa)
 # required by the 3-branch promotion path. Idempotent: skips targets that
 # already have an open MR from the same source branch.
+# Org branching model only.
 ####################################################
 agentPromoteMR:
   stage: maintenance
   cache: []
   rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event' && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH && $GITLAB_USER_LOGIN == $AI_AGENT_USERNAME
+    - if: $BRANCHING_MODEL != 'release' && $CI_PIPELINE_SOURCE == 'merge_request_event' && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH && $GITLAB_USER_LOGIN == $AI_AGENT_USERNAME
       when: always
     - when: never
   allow_failure: true

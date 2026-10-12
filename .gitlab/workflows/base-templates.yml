@@ -18,9 +18,12 @@
 # MR pipelines diff via --merge-base against origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
 # (three-dot semantics) instead of trusting CI_MERGE_REQUEST_DIFF_BASE_SHA,
 # which can go stale after a rebase/force-push; push pipelines diff straight
-# from CI_COMMIT_BEFORE_SHA since branch history there is already linear. DEPLOY_PACKAGE
-# defaults to sfdx-git-delta's own output path (package/package.xml), so no
-# copy step is needed.
+# from CI_COMMIT_BEFORE_SHA since branch history there is already linear, unless
+# DELTA_BASE_BRANCH is set (release branching model): then the push diffs from the
+# merge-base with origin/$DELTA_BASE_BRANCH, so every deploy carries the whole
+# release and a skipped/failed/manual run can't leave earlier pushes undeployed.
+# DEPLOY_PACKAGE defaults to sfdx-git-delta's own output path (package/package.xml),
+# so no copy step is needed.
 # Requires: sfdx-git-delta >= 7.3.0 (adds --merge-base), apextestlist >= 1.15.0
 # (adds -e/--fail-on-empty manifest scanning, so the plugin itself fails the
 # job when the manifest has Apex but no resolvable tests).
@@ -31,6 +34,8 @@
     - |
       if [ -n "${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-}" ]; then
         sf sgd source delta --from "origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}" --merge-base --output-dir .
+      elif [ -n "${DELTA_BASE_BRANCH:-}" ]; then
+        sf sgd source delta --from "origin/${DELTA_BASE_BRANCH}" --merge-base --output-dir .
       else
         sf sgd source delta --from "$CI_COMMIT_BEFORE_SHA" --output-dir .
       fi
@@ -123,11 +128,17 @@
 ####################################################
 # Destroy metadata via sfdx-git-delta on push pipelines.
 # allow_failure: true on callers — exits 0 when delta has no destructive types.
+# Honors DELTA_BASE_BRANCH the same way as .prepare-deploy.
 ####################################################
 .delete-metadata-push:
   before_script:
     - !reference [.authenticate, before_script]
-    - sf sgd source delta --from "$CI_COMMIT_BEFORE_SHA" --output-dir .
+    - |
+      if [ -n "${DELTA_BASE_BRANCH:-}" ]; then
+        sf sgd source delta --from "origin/${DELTA_BASE_BRANCH}" --merge-base --output-dir .
+      else
+        sf sgd source delta --from "$CI_COMMIT_BEFORE_SHA" --output-dir .
+      fi
     - |
       if [ "$CI_ENVIRONMENT_NAME" == "production" ] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
         if [ -n "$DESTRUCTIVE_TESTS" ]; then

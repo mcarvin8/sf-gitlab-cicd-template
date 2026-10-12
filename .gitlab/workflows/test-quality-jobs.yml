@@ -55,7 +55,7 @@ code-analyzer-check:
   rules:
     - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'develop' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == $CI_DEFAULT_BRANCH
       when: never
-    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'develop'
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'develop' || ($BRANCHING_MODEL == 'release' && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^release\//)
       changes:
         - "force-app/main/default/classes/*.cls"
         - "force-app/main/default/triggers/*.trigger"
@@ -107,7 +107,7 @@ quality:
   rules:
     - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'develop' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'fullqa'
       when: never
-    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'develop'
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'develop' || ($BRANCHING_MODEL == 'release' && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^release\//)
       changes:
         - "force-app/main/default/classes/*.cls"
         - "force-app/main/default/triggers/*.trigger"
@@ -149,13 +149,14 @@ quality:
 
 ####################################################
 # MR GitLab Workflow Compliance Checks (main + sandbox).
+# Sandbox targets are develop/fullqa (org model) or release/* (release model).
 ####################################################
 pre-merge-check:
   stage: quality
   rules:
     - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'develop' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == $CI_DEFAULT_BRANCH
       when: never
-    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'develop' || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'develop' || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH || ($BRANCHING_MODEL == 'release' && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^release\//)
       when: always
   allow_failure: false
   cache: []

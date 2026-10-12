@@ -45,6 +45,10 @@ Edit every job in the new file. Replace all `dev` / `develop` / `SANDBOX` refere
 | Branch name in rules    | e.g. `'staging'`                                            |
 | Disabled guard variable | e.g. `$STAGING_DISABLED`                                    |
 
+#### Release branching model
+
+The template below covers the org branching model. If you set `BRANCHING_MODEL: "release"` and want the new sandbox to receive `release/*` deploys, copy the `$BRANCHING_MODEL == 'release'` rules from `dev.yml` (automatic deploy) or `fullqa.yml` (manual deploy that `needs` the previous org's deploy) into the new org's `test:predeploy`, `deploy`, and `destroy:...:push` jobs, and point `needs` at the org that should be deployed first. Keep `DELTA_BASE_BRANCH: $CI_DEFAULT_BRANCH` in the deploy/destroy rules. If the new org should be checked by `pre-merge-check`, also set `DEV_DEPLOY_JOB`/`FULLQA_DEPLOY_JOB` accordingly.
+
 ### Step 3: Include the New Org File
 
 Add your new org file to `.gitlab-ci.yml`:
