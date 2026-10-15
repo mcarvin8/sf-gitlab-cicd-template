@@ -9,8 +9,8 @@
 # Only runs on web-based pipelines on org branches when $SHA variable is provided.
 ####################################################
 rollback:
+  extends: .maintainer-git
   stage: maintenance
-  cache: []
   rules:
     - if: $CI_PIPELINE_SOURCE == 'web' && $SHA && ($CI_COMMIT_REF_NAME == 'develop' || $CI_COMMIT_REF_NAME == 'fullqa' || $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH)
       when: always
@@ -48,8 +48,8 @@ sandboxRefresh:
 # Org branching model only.
 ####################################################
 prodBackfill:
+  extends: .maintainer-git
   stage: maintenance
-  cache: []
   rules:
     - if: $BRANCHING_MODEL != 'release' && $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'push'
       when: always
@@ -66,14 +66,15 @@ prodBackfill:
 # these rules and runs in both models.
 ####################################################
 .packageBackfillSbxBase:
+  extends: .maintainer-git
   stage: maintenance
-  cache: []
   rules:
     - if: $BRANCHING_MODEL != 'release' && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $PACKAGE_NAME && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'sbxBackfill'
       when: always
     - when: never
   allow_failure: false
   before_script:
+    - !reference [.maintainer-git, before_script]
     - !reference [.authenticate, before_script]
     - npm ci
 
@@ -122,8 +123,8 @@ packageBackfillPrd:
 # Protected branches are unable to be deleted this way.
 ####################################################
 branchCleanup:
+  extends: .maintainer-git
   stage: maintenance
-  cache: []
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'monthlyMaintenance'
       when: always
@@ -168,8 +169,8 @@ metadataAudit:
 # Org branching model only (recreates the develop/fullqa org branches).
 ####################################################
 refreshSbxBranches:
+  extends: .maintainer-git
   stage: maintenance
-  cache: []
   rules:
     - if: $BRANCHING_MODEL != 'release' && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'refreshSbxBranches'
       when: always

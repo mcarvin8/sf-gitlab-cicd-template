@@ -6,8 +6,10 @@
 #              by preferring the default branch version. Skips CI pipeline on push.
 # Usage: Called from CI/CD pipeline after successful production deployment
 # Environment Variables Required:
-#   - MAINTAINER_PAT_NAME, MAINTAINER_PAT_VALUE
+#   - MAINTAINER_PAT_NAME, MAINTAINER_PAT_USER_NAME, MAINTAINER_PAT_VALUE
 #   - CI_SERVER_HOST, CI_PROJECT_PATH, CI_COMMIT_SHORT_SHA, CI_DEFAULT_BRANCH
+# Prerequisite: maintainer_git.sh sourced and setup_maintainer_git called
+#   (done by the .maintainer-git CI template's before_script)
 ################################################################################
 set -e
 
@@ -24,8 +26,6 @@ function handle_delete_conflicts() {
 
 # Must fetch before checking out fullqa and develop branches
 git fetch -q
-git config user.name "${MAINTAINER_PAT_NAME}"
-git config user.email "${MAINTAINER_PAT_USER_NAME}@noreply.${CI_SERVER_HOST}"
 
 # Update the sandbox branches with changes from production
 for branch_name in fullqa develop
@@ -37,10 +37,5 @@ do
     handle_delete_conflicts
     git commit -m "Merge remote-tracking branch 'origin/${CI_DEFAULT_BRANCH}' into $branch_name"
     # Push changes to remote, skipping CI pipeline
-    git push "https://${MAINTAINER_PAT_NAME}:${MAINTAINER_PAT_VALUE}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" -o ci.skip
+    git push origin "$branch_name" -o ci.skip
 done
-
-# Cleanup, switch back to the SHA that triggered this pipeline and delete local branches
-git -c advice.detachedHead=false checkout -q $CI_COMMIT_SHORT_SHA
-git branch -D fullqa
-git branch -D develop

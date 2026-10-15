@@ -8,8 +8,10 @@
 # Usage: Called from scheduled CI/CD pipeline
 # Note: Protected branches cannot be deleted via this script
 # Environment Variables Required:
-#   - MAINTAINER_PAT_NAME, MAINTAINER_PAT_VALUE
+#   - MAINTAINER_PAT_NAME, MAINTAINER_PAT_USER_NAME, MAINTAINER_PAT_VALUE
 #   - CI_DEFAULT_BRANCH (predefined by GitLab)
+# Prerequisite: maintainer_git.sh sourced and setup_maintainer_git called
+#   (done by the .maintainer-git CI template's before_script)
 ################################################################################
 set -euo pipefail
 
@@ -63,7 +65,7 @@ for k in $(${filter} | grep --invert-match "origin/${CI_DEFAULT_BRANCH}" | sed /
     if check_branch_last_commit_date "$k" "$before_date"; then
         branch=$(echo $k | sed 's/origin\///')
         echo "Attempting to delete $branch"
-        git push "https://${MAINTAINER_PAT_NAME}:${MAINTAINER_PAT_VALUE}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" --delete $branch
+        git push origin --delete "$branch"
         # minor delay needed to prevent connection abort errors
         sleep 5
     fi
@@ -95,7 +97,7 @@ while IFS='|' read -r refname committerdate; do
     if [ -n "$commits_before_cutoff" ] && [ -n "$last_commit_hash" ] && [ "$commits_before_cutoff" = "$last_commit_hash" ]; then
         echo "Branch $branch_name last commit on $committerdate (older than $stale_before_date)"
         echo "Attempting to delete $branch_name"
-        git push "https://${MAINTAINER_PAT_NAME}:${MAINTAINER_PAT_VALUE}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" --delete "$branch_name"
+        git push origin --delete "$branch_name"
         # minor delay needed to prevent connection abort errors
         sleep 5
     fi

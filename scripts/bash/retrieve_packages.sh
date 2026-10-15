@@ -19,6 +19,8 @@
 # Objects.xml: Before retrieve, builds manifest/package.xml from that branch's org
 #   with only CustomObject (sf project generate manifest --metadata CustomObject) so the
 #   CLI does not scan all org metadata types (avoids RegistryError on types like OAS Yaml Schema).
+# Prerequisite: maintainer_git.sh sourced and setup_maintainer_git called
+#   (done by the .maintainer-git CI template's before_script)
 ################################################################################
 set -e
 
@@ -31,8 +33,6 @@ fi
 
 # Must fetch before checking out the git branch
 git fetch -q
-git config user.name "${MAINTAINER_PAT_NAME}"
-git config user.email "${MAINTAINER_PAT_USER_NAME}@noreply.${CI_SERVER_HOST}"
 
 # Function to map metadata types to force-app folder names using metadataRegistry.json
 get_folder_for_metadata_type() {
@@ -122,7 +122,7 @@ if [[ -n $(git status --porcelain force-app/) ]]; then
     max_push_attempts="${GIT_PUSH_MAX_ATTEMPTS:-5}"
     attempt=1
     while [[ "$attempt" -le "$max_push_attempts" ]]; do
-        if git push "https://${MAINTAINER_PAT_NAME}:${MAINTAINER_PAT_VALUE}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"; then
+        if git push origin "$branch_name"; then
             break
         fi
         if [[ "$attempt" -eq "$max_push_attempts" ]]; then
@@ -136,8 +136,3 @@ if [[ -n $(git status --porcelain force-app/) ]]; then
 else
     echo "There are no changes in the force-app directory on $branch_name."
 fi
-rm -rf manifest
-git reset --hard
-
-git -c advice.detachedHead=false checkout -q "$CI_COMMIT_SHORT_SHA"
-git branch -D "$branch_name"

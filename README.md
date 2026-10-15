@@ -201,6 +201,8 @@ The jobs that perform git operations require a GitLab project access token with 
 - `MAINTAINER_PAT_USER_NAME` - username of the token user
 - `MAINTAINER_PAT_VALUE` - the token value itself
 
+Jobs that push extend the `.maintainer-git` template, whose `before_script` sources `scripts/bash/maintainer_git.sh` and calls `setup_maintainer_git`. That sets the git identity and routes `git push origin` through the token via a credential helper held in environment variables - the token is never written to `.git/config` or passed on the command line.
+
 `pipelineCleanup` needs its own, more privileged token - see `$OWNER_PAT_VALUE` in [Custom CI/CD Variables](#custom-cicd-variables).
 
 Remove any of these jobs you don't need.

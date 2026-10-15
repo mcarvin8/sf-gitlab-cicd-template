@@ -11,6 +11,8 @@
 #   - CI_COMMIT_BRANCH: Branch to perform rollback on
 #   - MAINTAINER_PAT_NAME, MAINTAINER_PAT_USER_NAME, MAINTAINER_PAT_VALUE
 #   - GITLAB_USER_NAME
+# Prerequisite: maintainer_git.sh sourced and setup_maintainer_git called
+#   (done by the .maintainer-git CI template's before_script)
 ################################################################################
 set -e
 
@@ -27,8 +29,6 @@ function check_commit_age() {
 
 # Must fetch before checking out branches
 git fetch -q
-git config user.name "${MAINTAINER_PAT_NAME}"
-git config user.email "${MAINTAINER_PAT_USER_NAME}@noreply.${CI_SERVER_HOST}"
 git checkout -q $CI_COMMIT_BRANCH
 git pull --ff -q
 
@@ -60,8 +60,4 @@ fi
 git commit -m "Reverts changes of $SHA, Triggered by: $GITLAB_USER_NAME"
 
 # Push changes to remote
-git push "https://${MAINTAINER_PAT_NAME}:${MAINTAINER_PAT_VALUE}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
-
-# Cleanup
-git -c advice.detachedHead=false checkout -q $CI_COMMIT_SHORT_SHA
-git branch -D $CI_COMMIT_BRANCH
+git push origin "$CI_COMMIT_BRANCH"

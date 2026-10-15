@@ -51,6 +51,28 @@
     - !reference [.install-sf-plugins, before_script]
 
 ####################################################
+# Shared setup for jobs that push to the repo with the maintainer PAT.
+# before_script sets git identity and push credentials (scripts/bash/maintainer_git.sh).
+# after_script runs even when the job fails: it aborts any half-done merge/rebase,
+# returns to the pipeline commit and deletes the local branches the job checked
+# out, so a reused build directory starts clean.
+# Full history is needed for merges, reverts and branch age checks.
+# Jobs that define their own before_script/after_script reuse these via !reference.
+####################################################
+.maintainer-git:
+  cache: []
+  variables:
+    GIT_DEPTH: "0"
+  before_script:
+    - source ./scripts/bash/maintainer_git.sh
+    - setup_maintainer_git
+  after_script:
+    - git merge --abort 2>/dev/null || true
+    - git rebase --abort 2>/dev/null || true
+    - git -c advice.detachedHead=false checkout -q -f "$CI_COMMIT_SHA"
+    - git for-each-ref --format='%(refname:short)' refs/heads | xargs -r git branch -D
+
+####################################################
 # Authenticate to a Salesforce org.
 # Used as a building block via !reference in prepare-deploy and prepare-destroy.
 ####################################################

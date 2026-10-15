@@ -16,6 +16,8 @@
 #   - CI_COMMIT_SHORT_SHA: used when cleaning up local branches after recreation
 # Configurable (with defaults):
 #   DEV_BRANCH (develop), FULLQA_BRANCH (fullqa)
+# Prerequisite: maintainer_git.sh sourced and setup_maintainer_git called
+#   (done by the .maintainer-git CI template's before_script)
 ################################################################################
 
 set -e
@@ -25,9 +27,6 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
-
-git config user.name "${MAINTAINER_PAT_NAME}"
-git config user.email "${MAINTAINER_PAT_USER_NAME}@noreply.${CI_SERVER_HOST}"
 
 # Function to print colored output
 print_info() {
@@ -50,9 +49,6 @@ check_required_var() {
     fi
 }
 
-check_required_var "MAINTAINER_PAT_VALUE"
-check_required_var "MAINTAINER_PAT_NAME"
-check_required_var "MAINTAINER_PAT_USER_NAME"
 check_required_var "CI_SERVER_HOST"
 
 # Configurable branch and CI/CD variable names
@@ -339,7 +335,7 @@ recreate_branch() {
     
     # Push the new branch with ci.skip option
     print_info "Pushing branch '$new_branch' to origin (skipping CI pipeline)"
-    git push -u "https://${MAINTAINER_PAT_NAME}:${MAINTAINER_PAT_VALUE}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "$new_branch" -o ci.skip
+    git push -u origin "$new_branch" -o ci.skip
     
     if [[ $? -eq 0 ]]; then
         print_info "Successfully recreated branch: $new_branch"
