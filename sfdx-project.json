@@ -18,7 +18,7 @@
       "replaceWhenEnv": [
         {
           "env": "AUTH_ALIAS",
-          "value": "SANDBOX"
+          "value": "DEV"
         }
       ]
     },

@@ -20,7 +20,7 @@ cp .gitlab/workflows/orgs/dev.yml .gitlab/workflows/orgs/staging.yml
 
 ### Step 2: Update Job Names and Variables
 
-Edit every job in the new file. Replace all `dev` / `develop` / `SANDBOX` references with your org's values.
+Edit every job in the new file. Replace all `dev` / `develop` / `DEV` references with your org's values.
 
 #### Job names to define:
 
@@ -29,6 +29,8 @@ Edit every job in the new file. Replace all `dev` / `develop` / `SANDBOX` refere
 - `deploy:[ORG]`
 - `destroy:[ORG]` (web pipeline)
 - `destroy:[ORG]:push` (push pipeline)
+
+Also add `test:predeploy:[ORG]` (with `optional: true`) to the `needs` list of the `quality` job in `test-quality-jobs.yml`, so SonarQube receives that org's validation coverage.
 
 #### Per-job values to update:
 
@@ -56,7 +58,7 @@ Add your new org file to `.gitlab-ci.yml`:
 ```yaml
 include:
   - local: ".gitlab/workflows/base-templates.yml"
-  - local: ".gitlab/workflows/core-jobs.yml"
+  - local: ".gitlab/workflows/build.yml"
   - local: ".gitlab/workflows/test-quality-jobs.yml"
   - local: ".gitlab/workflows/maintenance-pipeline.yml"
   - local: ".gitlab/workflows/orgs/dev.yml"

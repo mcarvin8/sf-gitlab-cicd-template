@@ -18,7 +18,7 @@
 #
 # Environment Variables Required:
 #   - MAINTAINER_PAT_VALUE: GitLab PAT with api scope (same one used by
-#       auto_merge.sh, refresh_sandbox_branches.sh, etc.)
+#       refresh_sandbox_branches.sh, verify_branch_compliance.sh, etc.)
 #   - CI_API_V4_URL or CI_SERVER_HOST: GitLab API base
 #   - CI_PROJECT_ID
 #   - CI_MERGE_REQUEST_IID
@@ -167,8 +167,6 @@ the same story branch must also be merged into \`develop\` and \`fullqa\`.
 - Source: \`${SOURCE_BRANCH}\`
 - Target: \`${target}\`
 - Originating MR: ${ORIG_WEB_URL}
-
-See \`AGENTS.md\` -> "Merge Request (MR) workflow requirements".
 EOF
 )
 
