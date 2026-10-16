@@ -2,12 +2,13 @@
 ################################################################################
 # Script: backfill_prod_into_sbx.sh
 # Description: Automatically merges changes from the default (production) branch
-#              into sandbox branches (fullqa and develop). Resolves conflicts
+#              into sandbox branches ($FULLQA_BRANCH and $DEV_BRANCH). Resolves conflicts
 #              by preferring the default branch version. Skips CI pipeline on push.
 # Usage: Called from CI/CD pipeline after successful production deployment
 # Environment Variables Required:
 #   - MAINTAINER_PAT_NAME, MAINTAINER_PAT_USER_NAME, MAINTAINER_PAT_VALUE
 #   - CI_SERVER_HOST, CI_PROJECT_PATH, CI_COMMIT_SHORT_SHA, CI_DEFAULT_BRANCH
+# Configurable (with defaults): DEV_BRANCH (develop), FULLQA_BRANCH (fullqa)
 # Prerequisite: maintainer_git.sh sourced and setup_maintainer_git called
 #   (done by the .maintainer-git CI template's before_script)
 ################################################################################
@@ -24,11 +25,11 @@ function handle_delete_conflicts() {
     done
 }
 
-# Must fetch before checking out fullqa and develop branches
+# Must fetch before checking out the sandbox branches
 git fetch -q
 
 # Update the sandbox branches with changes from production
-for branch_name in fullqa develop
+for branch_name in "${FULLQA_BRANCH:-fullqa}" "${DEV_BRANCH:-develop}"
 do
     git checkout -q $branch_name
     git pull --ff -q

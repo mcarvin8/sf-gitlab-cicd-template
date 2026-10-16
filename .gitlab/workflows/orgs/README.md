@@ -20,7 +20,7 @@ cp .gitlab/workflows/orgs/dev.yml .gitlab/workflows/orgs/staging.yml
 
 ### Step 2: Update Job Names and Variables
 
-Edit every job in the new file. Replace all `dev` / `develop` / `DEV` references with your org's values.
+Edit the new file. Replace all `dev` / `DEV` references and the `$DEV_BRANCH` branch with your org's values. Credentials, the deploy lock (`resource_group`) and the environment URL are defined once at the top of the file in two hidden templates, `.[ORG]-auth` and `.[ORG]-org`, which every job extends.
 
 #### Job names to define:
 
@@ -33,20 +33,22 @@ Git-tracked deletions need no job of their own: `deploy:[ORG]` and `test:predepl
 
 Also add `test:predeploy:[ORG]` (with `optional: true`) to the `needs` list of the `quality` job in `test-quality-jobs.yml`, so SonarQube receives that org's validation coverage.
 
-#### Per-job values to update:
+#### Values to update:
 
-| Field                   | What to set                                                 |
-| ----------------------- | ----------------------------------------------------------- |
-| `resource_group`        | unique name per org (e.g. `staging`)                        |
-| `AUTH_ALIAS`            | Salesforce CLI alias (e.g. `STAGING`)                       |
-| `AUTH_CLIENT_ID`        | CI variable holding the org's JWT client ID                 |
-| `AUTH_JWT_KEY_FILE`     | Path from a GitLab File variable containing the private key |
-| `AUTH_USERNAME`         | Salesforce username to authorize                            |
-| `AUTH_INSTANCE_URL`     | Salesforce My Domain login URL                              |
-| `environment.name`      | e.g. `validate-staging`, `staging`                          |
-| `environment.url`       | CI variable for the org URL (e.g. `$STAGING_ORG_URL`)       |
-| Branch name in rules    | e.g. `'staging'`                                            |
-| Disabled guard variable | e.g. `$STAGING_DISABLED`                                    |
+| Field                                  | What to set                                                 |
+| -------------------------------------- | ----------------------------------------------------------- |
+| `.[ORG]-org` → `resource_group`        | unique name per org (e.g. `staging`)                        |
+| `.[ORG]-auth` → `AUTH_ALIAS`           | Salesforce CLI alias (e.g. `STAGING`)                       |
+| `.[ORG]-auth` → `AUTH_CLIENT_ID`       | CI variable holding the org's JWT client ID                 |
+| `.[ORG]-auth` → `AUTH_JWT_KEY_FILE`    | Path from a GitLab File variable containing the private key |
+| `.[ORG]-auth` → `AUTH_USERNAME`        | Salesforce username to authorize                            |
+| `.[ORG]-auth` → `AUTH_INSTANCE_URL`    | Salesforce My Domain login URL                              |
+| `.[ORG]-org` → `environment.url`       | CI variable for the org URL (e.g. `$STAGING_ORG_URL`)       |
+| `environment.name` (per job)           | e.g. `validate-staging`, `staging`                          |
+| Branch name in rules                   | e.g. `'staging'`, or a new global variable like `$STAGING_BRANCH` |
+| Disabled guard variable                | e.g. `$STAGING_DISABLED`                                    |
+
+If the new org's branch should be treated like the other long-lived org branches (MRs *from* it skip validation and scans), add it to `.skip-org-branch-sources` in `base-templates.yml` and to the target-branch lists in `test-quality-jobs.yml`.
 
 #### Release branching model
 
@@ -94,12 +96,7 @@ Keep the private key out of the repository. Protect and scope the key variable t
 # [ORG_NAME] Org Jobs
 ####################################################
 
-test:unit:[ORG_NAME]:
-  extends: .test-unit
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == '[BRANCH_NAME]'
-      when: always
-    - when: never
+.[ORG_NAME]-auth:
   variables:
     AUTH_ALIAS: [AUTH_ALIAS]
     AUTH_CLIENT_ID: $[JWT_CLIENT_ID_VAR]
@@ -107,82 +104,59 @@ test:unit:[ORG_NAME]:
     AUTH_USERNAME: $[USERNAME_VAR]
     AUTH_INSTANCE_URL: $[INSTANCE_URL_VAR]
 
+.[ORG_NAME]-org:
+  extends: .[ORG_NAME]-auth
+  resource_group: [ORG_NAME]
+  environment:
+    url: $[ORG_URL_VAR]
+
+test:unit:[ORG_NAME]:
+  extends: [.test-unit, .[ORG_NAME]-auth]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == '[BRANCH_NAME]'
+      when: always
+
 test:postrun:[ORG_NAME]:
-  extends: .test-postrun
+  extends: [.test-postrun, .[ORG_NAME]-auth]
   rules:
     - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == '[BRANCH_NAME]'
       when: delayed
       start_in: 90 minutes
-    - when: never
   needs: ["test:unit:[ORG_NAME]"]
-  variables:
-    AUTH_ALIAS: [AUTH_ALIAS]
-    AUTH_CLIENT_ID: $[JWT_CLIENT_ID_VAR]
-    AUTH_JWT_KEY_FILE: $[JWT_KEY_VAR]
-    AUTH_USERNAME: $[USERNAME_VAR]
-    AUTH_INSTANCE_URL: $[INSTANCE_URL_VAR]
 
 test:predeploy:[ORG_NAME]:
-  extends: .validate-metadata
+  extends: [.validate-metadata, .[ORG_NAME]-org]
   stage: test
-  resource_group: [ORG_NAME]
   rules:
-    - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'develop' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == $CI_DEFAULT_BRANCH
-      when: never
+    - !reference [.skip-org-branch-sources, rules]
     - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == '[BRANCH_NAME]'
       when: manual
+  # Manual jobs default to allow_failure: true; keep validation failures blocking.
   allow_failure: false
-  variables:
-    AUTH_ALIAS: [AUTH_ALIAS]
-    AUTH_CLIENT_ID: $[JWT_CLIENT_ID_VAR]
-    AUTH_JWT_KEY_FILE: $[JWT_KEY_VAR]
-    AUTH_USERNAME: $[USERNAME_VAR]
-    AUTH_INSTANCE_URL: $[INSTANCE_URL_VAR]
   environment:
     name: validate-[ORG_NAME]
-    url: $[ORG_URL_VAR]
 
 deploy:[ORG_NAME]:
-  extends: .deploy-metadata
+  extends: [.deploy-metadata, .[ORG_NAME]-org]
   stage: deploy
-  resource_group: [ORG_NAME]
   rules:
     - if: $[DISABLED_VAR]
       when: never
-    - if: '$CI_COMMIT_MESSAGE =~ /chore\(metadata-retrieval\):/i'
-      when: never
     - if: $CI_COMMIT_REF_NAME == '[BRANCH_NAME]' && $CI_PIPELINE_SOURCE == 'push'
       when: always
-  allow_failure: false
-  variables:
-    AUTH_ALIAS: [AUTH_ALIAS]
-    AUTH_CLIENT_ID: $[JWT_CLIENT_ID_VAR]
-    AUTH_JWT_KEY_FILE: $[JWT_KEY_VAR]
-    AUTH_USERNAME: $[USERNAME_VAR]
-    AUTH_INSTANCE_URL: $[INSTANCE_URL_VAR]
   environment:
     name: [ORG_NAME]
-    url: $[ORG_URL_VAR]
 
 destroy:[ORG_NAME]:
-  extends: .delete-metadata
+  extends: [.delete-metadata, .[ORG_NAME]-org]
   stage: destroy
-  resource_group: [ORG_NAME]
   rules:
     - if: $[DISABLED_VAR]
       when: never
     - if: $CI_COMMIT_REF_NAME == '[BRANCH_NAME]' && $CI_PIPELINE_SOURCE == 'web' && $PACKAGE
       when: always
-  allow_failure: false
-  variables:
-    AUTH_ALIAS: [AUTH_ALIAS]
-    AUTH_CLIENT_ID: $[JWT_CLIENT_ID_VAR]
-    AUTH_JWT_KEY_FILE: $[JWT_KEY_VAR]
-    AUTH_USERNAME: $[USERNAME_VAR]
-    AUTH_INSTANCE_URL: $[INSTANCE_URL_VAR]
   environment:
     name: [ORG_NAME]
-    url: $[ORG_URL_VAR]
 ```
 
 ### Template Placeholders

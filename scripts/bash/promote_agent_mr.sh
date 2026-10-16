@@ -27,13 +27,16 @@
 #
 # Optional Environment Variables:
 #   - AI_AGENT_USERNAME (default: svc-ai-triage-agent)
-#   - AI_AGENT_PROMOTION_TARGETS (default: "develop fullqa")
+#   - AI_AGENT_PROMOTION_TARGETS (default: "$DEV_BRANCH $FULLQA_BRANCH")
+#   - DEV_BRANCH (default: develop), FULLQA_BRANCH (default: fullqa)
 ################################################################################
 
 set -euo pipefail
 
 AI_AGENT_USERNAME="${AI_AGENT_USERNAME:-svc-ai-triage-agent}"
-AI_AGENT_PROMOTION_TARGETS="${AI_AGENT_PROMOTION_TARGETS:-develop fullqa}"
+DEV_BRANCH="${DEV_BRANCH:-develop}"
+FULLQA_BRANCH="${FULLQA_BRANCH:-fullqa}"
+AI_AGENT_PROMOTION_TARGETS="${AI_AGENT_PROMOTION_TARGETS:-$DEV_BRANCH $FULLQA_BRANCH}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -84,12 +87,10 @@ if [[ "$TARGET_BRANCH" != "$DEFAULT_BRANCH" ]]; then
 fi
 
 # Refuse to promote from a long-lived branch. Story branches only.
-case "$SOURCE_BRANCH" in
-    main|develop|fullqa)
-        print_error "Refusing to promote: source branch '$SOURCE_BRANCH' is a long-lived branch."
-        exit 1
-        ;;
-esac
+if [[ "$SOURCE_BRANCH" == "$DEFAULT_BRANCH" || "$SOURCE_BRANCH" == "$DEV_BRANCH" || "$SOURCE_BRANCH" == "$FULLQA_BRANCH" ]]; then
+    print_error "Refusing to promote: source branch '$SOURCE_BRANCH' is a long-lived branch."
+    exit 1
+fi
 
 ################################################################################
 # Verify the MR author is the AI agent's service account.
@@ -133,7 +134,7 @@ create_promotion_mr() {
     # Strip any team prefix like "[develop]" / "[fullqa]" that we may have
     # added on a prior run, then add the correct one for this target.
     local clean_title
-    clean_title=$(echo "$ORIG_TITLE" | sed -E 's/^\[(develop|fullqa|main)\][[:space:]]*//I')
+    clean_title=$(echo "$ORIG_TITLE" | sed -E "s/^\[(${DEV_BRANCH}|${FULLQA_BRANCH}|${DEFAULT_BRANCH})\][[:space:]]*//I")
     local new_title="[${target}] ${clean_title}"
 
     # Look for an existing open MR from SOURCE_BRANCH -> target.
@@ -162,7 +163,7 @@ Automated companion MR for the 3-branch promotion path.
 
 This MR was opened automatically because @${AI_AGENT_USERNAME} opened
 ${ORIG_WEB_URL} into \`${DEFAULT_BRANCH}\`. Per the repo's promotion model,
-the same story branch must also be merged into \`develop\` and \`fullqa\`.
+the same story branch must also be merged into \`${DEV_BRANCH}\` and \`${FULLQA_BRANCH}\`.
 
 - Source: \`${SOURCE_BRANCH}\`
 - Target: \`${target}\`

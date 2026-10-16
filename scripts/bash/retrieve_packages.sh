@@ -3,12 +3,16 @@
 # Script: retrieve_packages.sh
 # Description: Retrieves Salesforce metadata from a specific org (sandbox or production)
 #              into its Git branch based on package.xml definitions. Commits and
-#              pushes changes.
+#              pushes changes. Sandbox-branch pushes skip CI (the metadata came
+#              from that org, so there is nothing to deploy); default-branch pushes
+#              run CI so prodBackfill merges them into the sandbox branches
+#              (deploy:prd skips chore(metadata-retrieval) commits).
 #              Optionally pre-purges force-app folders for specific metadata
 #              types to ensure clean retrieval and remove destroyed metadata files.
 # Usage: Called from CI/CD pipeline (one job per branch for parallel runs).
 # Environment Variables Required:
-#   - ORG_BRANCH: Git branch / sf org alias
+#   - ORG_BRANCH: Git branch to commit retrieved metadata to
+#   - AUTH_ALIAS: sf org alias set by the .authenticate template
 #   - PACKAGE_NAME: XML file name from scripts/packages/ folder
 #   - PREPURGE: Set to "true" to enable pre-purge of metadata folders
 #   - DEPLOY_TIMEOUT: Wait time for retrieval operation
@@ -31,22 +35,34 @@ if [[ -z "$branch_name" ]]; then
     exit 1
 fi
 
+target_org="${AUTH_ALIAS:-$branch_name}"
+
+# Sandbox branches skip CI on push; the default branch keeps it (see header)
+push_options=()
+if [[ "$branch_name" != "${CI_DEFAULT_BRANCH:-}" ]]; then
+    push_options=(-o ci.skip)
+fi
+
 # Must fetch before checking out the git branch
 git fetch -q
+
+# metadataRegistry.json from the source-deploy-retrieve library bundled with the
+# sf CLI, so no project npm install is needed. Resolved once before pre-purge.
+registry_file=""
+find_metadata_registry() {
+    local sf_root
+    sf_root=$(sf version --verbose --json 2>/dev/null | jq -r '.rootPath // empty')
+    if [[ -n "$sf_root" ]]; then
+        find "$sf_root" -path '*/source-deploy-retrieve/lib/src/registry/metadataRegistry.json' -print -quit 2>/dev/null
+    fi
+}
 
 # Function to map metadata types to force-app folder names using metadataRegistry.json
 get_folder_for_metadata_type() {
     local metadata_type=$1
-    local registry_file="node_modules/@salesforce/source-deploy-retrieve/lib/src/registry/metadataRegistry.json"
 
     if [[ ! -f "$registry_file" ]]; then
-        echo "Warning: metadataRegistry.json not found at '$registry_file'. Cannot lookup metadata type folder. Skipping pre-purge for '$metadata_type'." >&2
-        echo ""
-        return
-    fi
-
-    if ! command -v jq &> /dev/null; then
-        echo "Warning: jq not found, cannot lookup metadata type folder. Falling back to empty string." >&2
+        echo "Warning: metadataRegistry.json not found in the sf CLI install. Cannot lookup metadata type folder. Skipping pre-purge for '$metadata_type'." >&2
         echo ""
         return
     fi
@@ -71,7 +87,7 @@ mkdir -p manifest
 if [[ "$PACKAGE_NAME" == "Objects.xml" ]]; then
     echo "Objects.xml: generating manifest/package.xml (CustomObject only) from '${branch_name}'..."
     sf project generate manifest \
-        --from-org "$branch_name" \
+        --from-org "$target_org" \
         --metadata CustomObject \
         --output-dir manifest \
         --type package
@@ -87,6 +103,7 @@ if [[ "$PREPURGE" == "true" ]]; then
     echo "Pre-purging force-app folders for metadata types in $PACKAGE_NAME..."
 
     metadata_types=$(grep -oP '(?<=<name>)[^<]+(?=</name>)' "scripts/packages/$PACKAGE_NAME" || true)
+    registry_file=$(find_metadata_registry)
 
     while IFS= read -r metadata_type; do
         if [ -n "$metadata_type" ]; then
@@ -106,9 +123,9 @@ fi
 
 echo "Retrieving metadata defined in $PACKAGE_NAME from $branch_name..."
 if [[ "$PACKAGE_NAME" == "Objects.xml" ]]; then
-    sf project retrieve start --manifest manifest/package.xml --target-org "$branch_name" --ignore-conflicts --wait "$DEPLOY_TIMEOUT" 1>/dev/null
+    sf project retrieve start --manifest manifest/package.xml --target-org "$target_org" --ignore-conflicts --wait "$DEPLOY_TIMEOUT" 1>/dev/null
 else
-    sf project retrieve start --manifest manifest/package.xml --target-org "$branch_name" --ignore-conflicts --wait "$DEPLOY_TIMEOUT"
+    sf project retrieve start --manifest manifest/package.xml --target-org "$target_org" --ignore-conflicts --wait "$DEPLOY_TIMEOUT"
 fi
 git add --renormalize force-app/ 2>/dev/null || true
 if [[ -n $(git status --porcelain force-app/) ]]; then
@@ -122,7 +139,7 @@ if [[ -n $(git status --porcelain force-app/) ]]; then
     max_push_attempts="${GIT_PUSH_MAX_ATTEMPTS:-5}"
     attempt=1
     while [[ "$attempt" -le "$max_push_attempts" ]]; do
-        if git push origin "$branch_name"; then
+        if git push "${push_options[@]}" origin "$branch_name"; then
             break
         fi
         if [[ "$attempt" -eq "$max_push_attempts" ]]; then

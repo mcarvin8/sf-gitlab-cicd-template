@@ -4,7 +4,6 @@
 build:
   image: docker:latest
   stage: build
-  cache: []
   services:
     - name: docker:dind
       alias: docker
@@ -16,7 +15,6 @@ build:
       when: always
     - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'dockerBuild'
       when: always
-  allow_failure: false
   variables:
     IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
     DOCKER_HOST: tcp://docker:2376

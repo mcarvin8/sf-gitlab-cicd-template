@@ -17,9 +17,11 @@ ENV SF_AUTOUPDATE_DISABLE=true \
     NODE_NO_WARNINGS=1
 
 # Install Salesforce CLI and other required software (git, jq, curl); nodejs
-# already ships in the base image
+# already ships in the base image. Java (PMD engine), Python (Flow engine) and the
+# code-analyzer/sf-cat plugins are for the code-analyzer-check job, so it doesn't
+# install them on every merge request.
 # Print Salesforce CLI version in format accepted for Salesforce CLI bugs on GitHub
-RUN apt-get update && apt-get install -y curl jq git && \
+RUN apt-get update && apt-get install -y curl jq git openjdk-17-jre-headless python3 && \
     rm -rf /var/lib/apt/lists/* && \
     npm install --global npm@latest && \
     npm install --global @salesforce/cli@latest-rc && \
@@ -27,4 +29,6 @@ RUN apt-get update && apt-get install -y curl jq git && \
     echo y | sf plugins install apex-code-coverage-transformer@latest && \
     echo y | sf plugins install sf-package-list@latest && \
     echo y | sf plugins install apextestlist@^1.15.0 && \
-    sf version --verbose --json || true
+    sf plugins install code-analyzer@latest && \
+    echo y | sf plugins install sf-cat@latest && \
+    { sf version --verbose --json || true; }

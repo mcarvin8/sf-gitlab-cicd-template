@@ -51,6 +51,17 @@
     - !reference [.install-sf-plugins, before_script]
 
 ####################################################
+# Shared rule: skip MR pipelines whose source is a long-lived org branch
+# (e.g. a $DEV_BRANCH -> $FULLQA_BRANCH or default-branch backfill MR); only
+# story/release branches are validated and scanned.
+# Use as the first entry of a job's rules: - !reference [.skip-org-branch-sources, rules]
+####################################################
+.skip-org-branch-sources:
+  rules:
+    - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == $DEV_BRANCH || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == $FULLQA_BRANCH || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == $CI_DEFAULT_BRANCH
+      when: never
+
+####################################################
 # Shared setup for jobs that push to the repo with the maintainer PAT.
 # before_script sets git identity and push credentials (scripts/bash/maintainer_git.sh).
 # after_script runs even when the job fails: it aborts any half-done merge/rebase,
@@ -60,7 +71,6 @@
 # Jobs that define their own before_script/after_script reuse these via !reference.
 ####################################################
 .maintainer-git:
-  cache: []
   variables:
     GIT_DEPTH: "0"
   before_script:

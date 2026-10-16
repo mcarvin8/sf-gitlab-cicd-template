@@ -13,7 +13,7 @@
 #                instead of checking develop/fullqa branch merges.
 #
 # Usage: Sourced from GitLab CI (pre-merge-check jobs).
-# Dependencies: git, curl, jq (optional)
+# Dependencies: git, curl, jq
 #
 # Required env vars: CI_COMMIT_SHA, CI_MERGE_REQUEST_*, CI_MERGE_REQUEST_DIFF_BASE_SHA,
 #                    CI_PROJECT_ID, CI_SERVER_HOST, CI_PROJECT_PATH, MAINTAINER_PAT_VALUE,
@@ -64,6 +64,10 @@ check_required_var "CI_SERVER_HOST"
 check_required_var "CI_PROJECT_PATH"
 check_required_var "MAINTAINER_PAT_VALUE"
 check_required_var "CI_DEFAULT_BRANCH"
+if ! command -v jq &>/dev/null; then
+    print_status "$RED" "Error: jq is required but not installed"
+    exit 1
+fi
 
 # Configurable org branch and job names — override via CI/CD variables if your orgs differ
 BRANCHING_MODEL="${BRANCHING_MODEL:-org}"
@@ -606,96 +610,43 @@ check_branch_merged() {
 }
 
 # Function to check deployment job status via GitLab API
+# Returns the job's status (success, failed, manual, ...) from the most recent
+# pipeline for commit_sha that has a job named job_name, or one of:
+# job_not_found, no_pipeline, api_error, unknown
 check_deployment_job_status() {
     local commit_sha=$1
     local job_name=$2
-    local access_token=$3
-    local project_id=$4
-    local server_host=$5
-    
+
     if [[ -z "$commit_sha" ]]; then
         echo "unknown"
         return
     fi
-    
-    # Remove trailing slash from server host
-    local server_host_clean=$(echo "$server_host" | sed 's|/$||')
-    local api_url="https://${server_host_clean}/api/v4/projects/${project_id}/pipelines"
-    
-    # Get pipelines for this commit SHA
-    local pipelines_response
-    pipelines_response=$(curl -s -w "\n%{http_code}" \
-        -H "PRIVATE-TOKEN: ${access_token}" \
-        "${api_url}?sha=${commit_sha}&per_page=10" 2>/dev/null)
-    
-    local pipelines_body=$(echo "$pipelines_response" | sed '$d')
-    local pipelines_status=$(echo "$pipelines_response" | tail -n1)
-    
-    if [[ "$pipelines_status" -lt 200 || "$pipelines_status" -ge 300 ]]; then
+
+    local api_base="https://${CI_SERVER_HOST_CLEAN}/api/v4/projects/${CI_PROJECT_ID}"
+    local pipeline_ids
+    if ! pipeline_ids=$(curl -sf -H "PRIVATE-TOKEN: ${MAINTAINER_PAT_VALUE}" \
+            "${api_base}/pipelines?sha=${commit_sha}&per_page=10" | jq -r '.[].id'); then
         echo "api_error"
         return
     fi
-    
-    # Find the most recent pipeline that has the deploy job
-    if command -v jq &> /dev/null; then
-        local pipeline_count
-        pipeline_count=$(echo "$pipelines_body" | jq 'length' 2>/dev/null || echo "0")
-        
-        if [[ "$pipeline_count" -eq 0 ]]; then
-            echo "no_pipeline"
+    if [[ -z "$pipeline_ids" ]]; then
+        echo "no_pipeline"
+        return
+    fi
+
+    # Pipelines are newest first; return the first one that has the job
+    local pipeline_id job_status
+    while IFS= read -r pipeline_id; do
+        job_status=$(curl -sf -H "PRIVATE-TOKEN: ${MAINTAINER_PAT_VALUE}" \
+            "${api_base}/pipelines/${pipeline_id}/jobs?per_page=100" 2>/dev/null |
+            jq -r --arg name "$job_name" '[.[] | select(.name == $name)][0].status // empty' 2>/dev/null)
+        if [[ -n "$job_status" ]]; then
+            echo "$job_status"
             return
         fi
-        
-        # Check each pipeline (up to 10) to find one with the deploy job
-        local pipeline_index=0
-        local job_status=""
-        while [[ $pipeline_index -lt $pipeline_count && $pipeline_index -lt 10 ]]; do
-            local pipeline_id
-            pipeline_id=$(echo "$pipelines_body" | jq -r ".[$pipeline_index].id // empty" 2>/dev/null)
-            
-            if [[ -z "$pipeline_id" ]]; then
-                ((pipeline_index++))
-                continue
-            fi
-            
-            # Get jobs for this pipeline
-            local jobs_url="https://${server_host_clean}/api/v4/projects/${project_id}/pipelines/${pipeline_id}/jobs"
-            local jobs_response
-            jobs_response=$(curl -s -w "\n%{http_code}" \
-                -H "PRIVATE-TOKEN: ${access_token}" \
-                "${jobs_url}" 2>/dev/null)
-            
-            local jobs_body=$(echo "$jobs_response" | sed '$d')
-            local jobs_status=$(echo "$jobs_response" | tail -n1)
-            
-            if [[ "$jobs_status" -ge 200 && "$jobs_status" -lt 300 ]]; then
-                # Find the specific job
-                job_status=$(echo "$jobs_body" | jq -r ".[] | select(.name == \"${job_name}\") | .status // empty" 2>/dev/null)
-                
-                if [[ -n "$job_status" ]]; then
-                    # Found the job, return its status
-                    echo "$job_status"
-                    return
-                fi
-            fi
-            
-            ((pipeline_index++))
-        done
-        
-        # If we checked all pipelines and didn't find the job
-        if [[ -z "$job_status" ]]; then
-            echo "job_not_found"
-        else
-            echo "$job_status"
-        fi
-    else
-        # Fallback without jq - try to parse JSON manually (basic check)
-        if echo "$pipelines_body" | grep -q "\"id\""; then
-            echo "unknown"  # Can't parse without jq
-        else
-            echo "no_pipeline"
-        fi
-    fi
+    done <<< "$pipeline_ids"
+
+    echo "job_not_found"
 }
 
 # Release branching model: there are no develop/fullqa branches to check; the
@@ -724,7 +675,7 @@ fi
 CI_SERVER_HOST_CLEAN=$(echo "$CI_SERVER_HOST" | sed 's|/$||')
 
 print_status "$YELLOW" "Checking predeploy validation job ($PREDEPLOY_JOB_NAME) for source branch commit..."
-PREDEPLOY_STATUS=$(check_deployment_job_status "$SOURCE_BRANCH_SHA" "$PREDEPLOY_JOB_NAME" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST_CLEAN")
+PREDEPLOY_STATUS=$(check_deployment_job_status "$SOURCE_BRANCH_SHA" "$PREDEPLOY_JOB_NAME")
 
 if [[ "$PREDEPLOY_STATUS" == "success" ]]; then
     print_status "$GREEN" "✓ Predeploy validation ($PREDEPLOY_JOB_NAME) passed"
@@ -750,119 +701,56 @@ RELEASE_DEV_DEPLOY_STATUS=""
 RELEASE_FULLQA_DEPLOY_STATUS=""
 if [[ "$MR_MODE" == "main" && "$BRANCHING_MODEL" == "release" ]]; then
     print_status "$YELLOW" "Checking $DEV_DEPLOY_JOB for source branch commit (release branching model)..."
-    RELEASE_DEV_DEPLOY_STATUS=$(check_deployment_job_status "$SOURCE_BRANCH_SHA" "$DEV_DEPLOY_JOB" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST_CLEAN")
+    RELEASE_DEV_DEPLOY_STATUS=$(check_deployment_job_status "$SOURCE_BRANCH_SHA" "$DEV_DEPLOY_JOB")
     print_status "$YELLOW" "  $DEV_DEPLOY_JOB status: $RELEASE_DEV_DEPLOY_STATUS"
     print_status "$YELLOW" "Checking $FULLQA_DEPLOY_JOB for source branch commit (release branching model)..."
-    RELEASE_FULLQA_DEPLOY_STATUS=$(check_deployment_job_status "$SOURCE_BRANCH_SHA" "$FULLQA_DEPLOY_JOB" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST_CLEAN")
+    RELEASE_FULLQA_DEPLOY_STATUS=$(check_deployment_job_status "$SOURCE_BRANCH_SHA" "$FULLQA_DEPLOY_JOB")
     print_status "$YELLOW" "  $FULLQA_DEPLOY_JOB status: $RELEASE_FULLQA_DEPLOY_STATUS"
 fi
 
-# Function to find commits with successful deploy jobs
-# Checks multiple commits that contain the source SHA until we find one with a successful deploy
-# Returns: "status|commit_sha" format
+# Function to find the deploy job that shipped source_sha to target_branch.
+# Candidates are the commits on origin/<target_branch> that contain source_sha
+# (git rev-list --ancestry-path), checked newest first in priority order:
+#   1. merge commits whose message names the source branch (the merge that brought it in)
+#   2. any other merge commit containing source_sha
+#   3. any commit containing source_sha (including source_sha itself)
+# The first candidate with a deploy job (any status) wins.
+# Returns: "status|commit_sha", or "job_not_found|"
 find_deploy_job_status() {
     local target_branch=$1
     local source_sha=$2
     local job_name=$3
-    local access_token=$4
-    local project_id=$5
-    local server_host=$6
-    local source_branch_name=$7  # Source branch name for matching commit messages
-    
-    # Get commits on the target branch and check if they contain the source SHA
-    local commits
-    commits=$(git log --format="%H" "origin/$target_branch" 2>/dev/null || echo "")
-    
-    if [[ -z "$commits" ]]; then
-        echo "no_commits|"
+    local source_branch_name=$4
+
+    local range="${source_sha}..origin/${target_branch}"
+    local merges all_commits named_merges="" commit_sha commit_msg escaped_branch
+    merges=$(git rev-list --merges --ancestry-path "$range" 2>/dev/null || true)
+    all_commits=$(git rev-list --ancestry-path "$range" 2>/dev/null || true)
+
+    escaped_branch=$(printf '%s\n' "$source_branch_name" | sed 's/[[\.*^$()+?{|]/\\&/g')
+    while IFS= read -r commit_sha; do
+        [[ -z "$commit_sha" ]] && continue
+        commit_msg=$(git log -1 --format="%B" "$commit_sha" 2>/dev/null || echo "")
+        if echo "$commit_msg" | grep -qiE "origin/${escaped_branch}(['\"]| |\$|/)" || \
+           echo "$commit_msg" | grep -qiE "(^|[^0-9A-Za-z-])${escaped_branch}([^0-9A-Za-z-]|\$)"; then
+            named_merges+="$commit_sha"$'\n'
+        fi
+    done <<< "$merges"
+
+    local -A checked=()
+    local job_status
+    while IFS= read -r commit_sha; do
+        [[ -z "$commit_sha" || -n "${checked[$commit_sha]:-}" ]] && continue
+        checked[$commit_sha]=1
+        print_status "$YELLOW" "  Checking $commit_sha for $job_name..." >&2
+        job_status=$(check_deployment_job_status "$commit_sha" "$job_name")
+        case "$job_status" in
+            job_not_found|no_pipeline|api_error|unknown|"") continue ;;
+        esac
+        echo "$job_status|$commit_sha"
         return
-    fi
-    
-    # First pass: Check merge commits that mention the source branch in the commit message
-    # These are the commits that actually merged the source branch
-    while IFS= read -r commit_sha; do
-        if [[ -z "$commit_sha" ]]; then
-            continue
-        fi
-        
-        # Check if this commit contains the source SHA and is a merge commit
-        if git merge-base --is-ancestor "$source_sha" "$commit_sha" 2>/dev/null; then
-            # Check if it's a merge commit (has more than one parent)
-            local parent_count
-            parent_count=$(git cat-file -p "$commit_sha" 2>/dev/null | grep -c "^parent " || echo "0")
-            if [[ "$parent_count" -gt 1 ]]; then
-                # Check if commit message mentions the source branch name
-                # Match the branch name more precisely to avoid matching similar branch names
-                # Look for patterns like "origin/branch" or "'branch'" in commit messages
-                local commit_msg
-                commit_msg=$(git log -1 --format="%B" "$commit_sha" 2>/dev/null || echo "")
-                # Escape special characters in branch name for regex matching
-                local escaped_branch
-                escaped_branch=$(printf '%s\n' "$source_branch_name" | sed 's/[[\.*^$()+?{|]/\\&/g')
-                # Match branch name as part of "origin/branch" pattern (most common in merge commits)
-                # or as a whole word (using word boundaries, but handle hyphens specially)
-                if echo "$commit_msg" | grep -qiE "origin/${escaped_branch}(['\"]| |\$|/)" || \
-                   echo "$commit_msg" | grep -qiE "(^|[^0-9A-Za-z-])${escaped_branch}([^0-9A-Za-z-]|\$)"; then
-                    print_status "$YELLOW" "  Checking merge commit $commit_sha (merged source branch)..." >&2
-                    local job_status
-                    job_status=$(check_deployment_job_status "$commit_sha" "$job_name" "$access_token" "$project_id" "$server_host" 2>/dev/null)
-                    
-                    # If we found the job (regardless of status), return it with the commit SHA
-                    if [[ "$job_status" != "job_not_found" && "$job_status" != "no_pipeline" && "$job_status" != "api_error" && "$job_status" != "unknown" && -n "$job_status" ]]; then
-                        echo "$job_status|$commit_sha"
-                        return
-                    fi
-                fi
-            fi
-        fi
-    done <<< "$commits"
-    
-    # Second pass: Check all merge commits that contain the source SHA
-    while IFS= read -r commit_sha; do
-        if [[ -z "$commit_sha" ]]; then
-            continue
-        fi
-        
-        # Check if this commit contains the source SHA and is a merge commit
-        if git merge-base --is-ancestor "$source_sha" "$commit_sha" 2>/dev/null; then
-            # Check if it's a merge commit (has more than one parent)
-            local parent_count
-            parent_count=$(git cat-file -p "$commit_sha" 2>/dev/null | grep -c "^parent " || echo "0")
-            if [[ "$parent_count" -gt 1 ]]; then
-                print_status "$YELLOW" "  Checking merge commit $commit_sha (contains source SHA)..." >&2
-                local job_status
-                job_status=$(check_deployment_job_status "$commit_sha" "$job_name" "$access_token" "$project_id" "$server_host" 2>/dev/null)
-                
-                # If we found the job (regardless of status), return it with the commit SHA
-                if [[ "$job_status" != "job_not_found" && "$job_status" != "no_pipeline" && "$job_status" != "api_error" && "$job_status" != "unknown" && -n "$job_status" ]]; then
-                    echo "$job_status|$commit_sha"
-                    return
-                fi
-            fi
-        fi
-    done <<< "$commits"
-    
-    # Third pass: If no merge commit had the deploy job, check all commits that contain the source SHA
-    while IFS= read -r commit_sha; do
-        if [[ -z "$commit_sha" ]]; then
-            continue
-        fi
-        
-        # Check if this commit contains the source SHA
-        if git merge-base --is-ancestor "$source_sha" "$commit_sha" 2>/dev/null; then
-            print_status "$YELLOW" "  Checking commit $commit_sha (contains source SHA)..." >&2
-            local job_status
-            job_status=$(check_deployment_job_status "$commit_sha" "$job_name" "$access_token" "$project_id" "$server_host" 2>/dev/null)
-            
-            # If we found the job (regardless of status), return it with the commit SHA
-            if [[ "$job_status" != "job_not_found" && "$job_status" != "no_pipeline" && "$job_status" != "api_error" && "$job_status" != "unknown" && -n "$job_status" ]]; then
-                echo "$job_status|$commit_sha"
-                return
-            fi
-        fi
-    done <<< "$commits"
-    
-    # If we checked all commits and didn't find the job
+    done <<< "${named_merges}${merges}"$'\n'"${all_commits}"$'\n'"${source_sha}"
+
     echo "job_not_found|"
 }
 
@@ -874,7 +762,7 @@ DEVELOP_DEPLOY_COMMIT=""
 if [[ "$MR_MODE" == "main" ]]; then
     if [[ "$FULLQA_EXISTS" == "true" && "$FULLQA_MERGED" == "true" ]]; then
         print_status "$YELLOW" "Searching for $FULLQA_DEPLOY_JOB job in commits containing source SHA..."
-        FULLQA_RESULT=$(find_deploy_job_status "$FULLQA_BRANCH" "$SOURCE_BRANCH_SHA" "$FULLQA_DEPLOY_JOB" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST" "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" 2>&1 | grep -v "Checking commit" | tail -1)
+        FULLQA_RESULT=$(find_deploy_job_status "$FULLQA_BRANCH" "$SOURCE_BRANCH_SHA" "$FULLQA_DEPLOY_JOB" "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME")
         FULLQA_DEPLOY_STATUS=$(echo "$FULLQA_RESULT" | cut -d'|' -f1)
         FULLQA_DEPLOY_COMMIT=$(echo "$FULLQA_RESULT" | cut -d'|' -f2)
         print_status "$YELLOW" "  $FULLQA_DEPLOY_JOB status: $FULLQA_DEPLOY_STATUS"
@@ -885,7 +773,7 @@ if [[ "$MR_MODE" == "main" ]]; then
 
     if [[ "$DEVELOP_EXISTS" == "true" && "$DEVELOP_MERGED" == "true" ]]; then
         print_status "$YELLOW" "Searching for $DEV_DEPLOY_JOB job in commits containing source SHA..."
-        DEVELOP_RESULT=$(find_deploy_job_status "$DEV_BRANCH" "$SOURCE_BRANCH_SHA" "$DEV_DEPLOY_JOB" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST" "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" 2>&1 | grep -v "Checking commit" | tail -1)
+        DEVELOP_RESULT=$(find_deploy_job_status "$DEV_BRANCH" "$SOURCE_BRANCH_SHA" "$DEV_DEPLOY_JOB" "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME")
         DEVELOP_DEPLOY_STATUS=$(echo "$DEVELOP_RESULT" | cut -d'|' -f1)
         DEVELOP_DEPLOY_COMMIT=$(echo "$DEVELOP_RESULT" | cut -d'|' -f2)
         print_status "$YELLOW" "  $DEV_DEPLOY_JOB status: $DEVELOP_DEPLOY_STATUS"
@@ -1088,7 +976,7 @@ if [[ "$MR_MODE" == "main" && "$BRANCHING_MODEL" != "release" ]]; then
             story_fullqa_commit=""
             if git show-ref --verify --quiet "refs/remotes/origin/$FULLQA_BRANCH" && \
                git merge-base --is-ancestor "$story_sha" "origin/$FULLQA_BRANCH" 2>/dev/null; then
-                RES=$(find_deploy_job_status "$FULLQA_BRANCH" "$story_sha" "$FULLQA_DEPLOY_JOB" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST" "$story_name" 2>&1 | grep -v "Checking commit" | tail -1)
+                RES=$(find_deploy_job_status "$FULLQA_BRANCH" "$story_sha" "$FULLQA_DEPLOY_JOB" "$story_name")
                 story_fullqa_status=$(echo "$RES" | cut -d'|' -f1)
                 story_fullqa_commit=$(echo "$RES" | cut -d'|' -f2)
             else
@@ -1102,7 +990,7 @@ if [[ "$MR_MODE" == "main" && "$BRANCHING_MODEL" != "release" ]]; then
             story_dev_commit=""
             if git show-ref --verify --quiet "refs/remotes/origin/$DEV_BRANCH" && \
                git merge-base --is-ancestor "$story_sha" "origin/$DEV_BRANCH" 2>/dev/null; then
-                RES=$(find_deploy_job_status "$DEV_BRANCH" "$story_sha" "$DEV_DEPLOY_JOB" "$MAINTAINER_PAT_VALUE" "$CI_PROJECT_ID" "$CI_SERVER_HOST" "$story_name" 2>&1 | grep -v "Checking commit" | tail -1)
+                RES=$(find_deploy_job_status "$DEV_BRANCH" "$story_sha" "$DEV_DEPLOY_JOB" "$story_name")
                 story_dev_status=$(echo "$RES" | cut -d'|' -f1)
                 story_dev_commit=$(echo "$RES" | cut -d'|' -f2)
             else
@@ -1468,7 +1356,7 @@ fi
 fi
 
 COMMENT_BODY+=$'\n'"---"$'\n'
-COMMENT_BODY+="*AI-Automated compliance check for $CI_MERGE_REQUEST_TARGET_BRANCH_NAME MRs. Fix issues before merging into $CI_MERGE_REQUEST_TARGET_BRANCH_NAME.*"
+COMMENT_BODY+="*Automated compliance check for $CI_MERGE_REQUEST_TARGET_BRANCH_NAME MRs. Fix issues before merging into $CI_MERGE_REQUEST_TARGET_BRANCH_NAME.*"
 if [[ -n "$NOTIFY_USER" ]]; then
     COMMENT_BODY+=$'\n\n'"cc @${NOTIFY_USER}"
 fi
@@ -1493,34 +1381,30 @@ NOTES_STATUS=$(echo "$NOTES_RESPONSE" | tail -n1)
 if [[ "$NOTES_STATUS" -ge 200 && "$NOTES_STATUS" -lt 300 ]]; then
     DELETED_COUNT=0
 
-    if command -v jq &> /dev/null; then
-        # Find notes containing our verification header (any author - resilient to bot token rotation)
-        NOTE_IDS=$(echo "$NOTES_BODY" | jq -r '.[] | select(.body | contains("Branch Compliance Verification") or contains("Branch Deployment Verification") or contains("MR Branch Compliance (fullqa/develop)")) | .id' 2>/dev/null | tr -d '\r' || echo "")
+    # Find notes containing our verification header (any author - resilient to bot token rotation)
+    NOTE_IDS=$(echo "$NOTES_BODY" | jq -r '.[] | select(.body | contains("Branch Compliance Verification") or contains("Branch Deployment Verification") or contains("MR Branch Compliance (fullqa/develop)")) | .id' 2>/dev/null | tr -d '\r' || echo "")
 
-        if [[ -n "$NOTE_IDS" ]]; then
-            while IFS= read -r note_id; do
-                note_id=$(echo "$note_id" | tr -d '\r')
-                if [[ -n "$note_id" && "$note_id" != "null" ]]; then
-                    print_status "$YELLOW" "  Deleting previous comment ID: $note_id"
+    if [[ -n "$NOTE_IDS" ]]; then
+        while IFS= read -r note_id; do
+            note_id=$(echo "$note_id" | tr -d '\r')
+            if [[ -n "$note_id" && "$note_id" != "null" ]]; then
+                print_status "$YELLOW" "  Deleting previous comment ID: $note_id"
 
-                    DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" \
-                        -X DELETE \
-                        -H "PRIVATE-TOKEN: ${MAINTAINER_PAT_VALUE}" \
-                        "${API_URL}/${note_id}" 2>&1)
+                DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" \
+                    -X DELETE \
+                    -H "PRIVATE-TOKEN: ${MAINTAINER_PAT_VALUE}" \
+                    "${API_URL}/${note_id}" 2>&1)
 
-                    DELETE_STATUS=$(echo "$DELETE_RESPONSE" | tail -n1)
+                DELETE_STATUS=$(echo "$DELETE_RESPONSE" | tail -n1)
 
-                    if [[ "$DELETE_STATUS" -ge 200 && "$DELETE_STATUS" -lt 300 ]] || [[ "$DELETE_STATUS" == "204" ]]; then
-                        DELETED_COUNT=$((DELETED_COUNT + 1))
-                        print_status "$GREEN" "    ✓ Deleted comment $note_id"
-                    else
-                        print_status "$YELLOW" "    ⚠ Failed to delete comment $note_id (HTTP $DELETE_STATUS)"
-                    fi
+                if [[ "$DELETE_STATUS" -ge 200 && "$DELETE_STATUS" -lt 300 ]] || [[ "$DELETE_STATUS" == "204" ]]; then
+                    DELETED_COUNT=$((DELETED_COUNT + 1))
+                    print_status "$GREEN" "    ✓ Deleted comment $note_id"
+                else
+                    print_status "$YELLOW" "    ⚠ Failed to delete comment $note_id (HTTP $DELETE_STATUS)"
                 fi
-            done <<< "$NOTE_IDS"
-        fi
-    else
-        print_status "$YELLOW" "  ⚠ jq not available, skipping comment deletion"
+            fi
+        done <<< "$NOTE_IDS"
     fi
 
     if [[ $DELETED_COUNT -gt 0 ]]; then
@@ -1537,14 +1421,7 @@ fi
 # ============================================================================
 
 # Prepare JSON payload for GitLab API
-# Use jq if available for proper JSON encoding, otherwise use printf
-if command -v jq &> /dev/null; then
-    JSON_PAYLOAD=$(jq -n --arg body "$COMMENT_BODY" '{body: $body}')
-else
-    # Fallback: manual JSON encoding (escape backslashes, quotes, and newlines)
-    ESCAPED_BODY=$(printf '%s' "$COMMENT_BODY" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g' | sed 's/\r/\\r/g')
-    JSON_PAYLOAD="{\"body\":\"$ESCAPED_BODY\"}"
-fi
+JSON_PAYLOAD=$(jq -n --arg body "$COMMENT_BODY" '{body: $body}')
 
 print_status "$YELLOW" "Posting new comment to merge request..."
 print_status "$YELLOW" "API URL: $API_URL"
@@ -1562,11 +1439,9 @@ HTTP_STATUS=$(echo "$HTTP_RESPONSE" | tail -n1)
 
 if [[ "$HTTP_STATUS" -ge 200 && "$HTTP_STATUS" -lt 300 ]]; then
     print_status "$GREEN" "✓ Successfully posted comment to merge request (HTTP $HTTP_STATUS)"
-    if command -v jq &> /dev/null; then
-        COMMENT_ID=$(echo "$HTTP_BODY" | jq -r '.id // empty')
-        if [[ -n "$COMMENT_ID" ]]; then
-            print_status "$GREEN" "Comment ID: $COMMENT_ID"
-        fi
+    COMMENT_ID=$(echo "$HTTP_BODY" | jq -r '.id // empty')
+    if [[ -n "$COMMENT_ID" ]]; then
+        print_status "$GREEN" "Comment ID: $COMMENT_ID"
     fi
 else
     print_status "$RED" "✗ Failed to post comment to merge request (HTTP $HTTP_STATUS)"
@@ -1611,5 +1486,11 @@ elif [[ "$MR_MODE" == "main" ]]; then
     fi
 else
     print_status "$GREEN" "MR branch compliance check complete."
+fi
+
+# Advisory by default. With PRE_MERGE_CHECK_ENFORCE=true, any failed (:x:) check fails the job.
+if [[ "${PRE_MERGE_CHECK_ENFORCE:-false}" == "true" && "$COMMENT_BODY" == *":x:"* ]]; then
+    print_status "$RED" "✗ One or more compliance checks failed (PRE_MERGE_CHECK_ENFORCE=true)"
+    exit 1
 fi
 exit 0

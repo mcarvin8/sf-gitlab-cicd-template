@@ -12,10 +12,8 @@ rollback:
   extends: .maintainer-git
   stage: maintenance
   rules:
-    - if: $CI_PIPELINE_SOURCE == 'web' && $SHA && ($CI_COMMIT_REF_NAME == 'develop' || $CI_COMMIT_REF_NAME == 'fullqa' || $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH)
+    - if: $CI_PIPELINE_SOURCE == 'web' && $SHA && ($CI_COMMIT_REF_NAME == $DEV_BRANCH || $CI_COMMIT_REF_NAME == $FULLQA_BRANCH || $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH)
       when: always
-    - when: never
-  allow_failure: false
   script:
     - source ./scripts/bash/rollback.sh
 
@@ -23,21 +21,13 @@ rollback:
 # Create or refresh a sandbox.
 ####################################################
 sandboxRefresh:
+  extends: .prd-auth
   stage: maintenance
-  cache: []
   rules:
     - if: '$CI_PIPELINE_SOURCE == "web" && $SANDBOX && $CI_COMMIT_TAG =~ /^sandbox_v\d+$/'
       when: always
-    - when: never
-  allow_failure: false
   before_script:
     - !reference [.authenticate, before_script]
-  variables:
-    AUTH_ALIAS: PRODUCTION
-    AUTH_CLIENT_ID: $PRODUCTION_JWT_CLIENT_ID
-    AUTH_JWT_KEY_FILE: $PRODUCTION_JWT_KEY
-    AUTH_USERNAME: $PRODUCTION_USERNAME
-    AUTH_INSTANCE_URL: $PRODUCTION_INSTANCE_URL
   script:
     - source ./scripts/bash/create_sandbox.sh
 
@@ -53,7 +43,6 @@ prodBackfill:
   rules:
     - if: $BRANCHING_MODEL != 'release' && $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'push'
       when: always
-    - when: never
   allow_failure: true
   script:
     - source ./scripts/bash/backfill_prod_into_sbx.sh
@@ -64,6 +53,7 @@ prodBackfill:
 # ($JOB_NAME == sbxBackfill); both jobs run together and do not share git state.
 # Sandbox backfills are org branching model only; packageBackfillPrd overrides
 # these rules and runs in both models.
+# Org credentials come from the .<org>-auth templates in orgs/<org>.yml.
 ####################################################
 .packageBackfillSbxBase:
   extends: .maintainer-git
@@ -71,50 +61,31 @@ prodBackfill:
   rules:
     - if: $BRANCHING_MODEL != 'release' && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $PACKAGE_NAME && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'sbxBackfill'
       when: always
-    - when: never
-  allow_failure: false
   before_script:
     - !reference [.maintainer-git, before_script]
     - !reference [.authenticate, before_script]
-    - npm ci
 
 packageBackfillSbxFullqa:
-  extends: .packageBackfillSbxBase
+  extends: [.packageBackfillSbxBase, .fullqa-auth]
   variables:
-    ORG_BRANCH: fullqa
-    AUTH_ALIAS: fullqa
-    AUTH_CLIENT_ID: $FULLQA_JWT_CLIENT_ID
-    AUTH_JWT_KEY_FILE: $FULLQA_JWT_KEY
-    AUTH_USERNAME: $FULLQA_USERNAME
-    AUTH_INSTANCE_URL: $FULLQA_INSTANCE_URL
+    ORG_BRANCH: $FULLQA_BRANCH
   script:
     - source ./scripts/bash/retrieve_packages.sh
 
 packageBackfillSbxDevelop:
-  extends: .packageBackfillSbxBase
+  extends: [.packageBackfillSbxBase, .dev-auth]
   variables:
-    ORG_BRANCH: develop
-    AUTH_ALIAS: develop
-    AUTH_CLIENT_ID: $DEV_JWT_CLIENT_ID
-    AUTH_JWT_KEY_FILE: $DEV_JWT_KEY
-    AUTH_USERNAME: $DEV_USERNAME
-    AUTH_INSTANCE_URL: $DEV_INSTANCE_URL
+    ORG_BRANCH: $DEV_BRANCH
   script:
     - source ./scripts/bash/retrieve_packages.sh
 
 packageBackfillPrd:
-  extends: .packageBackfillSbxBase
+  extends: [.packageBackfillSbxBase, .prd-auth]
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $PACKAGE_NAME && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'prdBackfill'
       when: always
-    - when: never
   variables:
     ORG_BRANCH: $CI_DEFAULT_BRANCH
-    AUTH_ALIAS: $CI_DEFAULT_BRANCH
-    AUTH_CLIENT_ID: $PRODUCTION_JWT_CLIENT_ID
-    AUTH_JWT_KEY_FILE: $PRODUCTION_JWT_KEY
-    AUTH_USERNAME: $PRODUCTION_USERNAME
-    AUTH_INSTANCE_URL: $PRODUCTION_INSTANCE_URL
   script:
     - source ./scripts/bash/retrieve_packages.sh
 
@@ -128,8 +99,6 @@ branchCleanup:
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'monthlyMaintenance'
       when: always
-    - when: never
-  allow_failure: false
   script:
     - source ./scripts/bash/delete_stale_branches.sh
 
@@ -139,12 +108,9 @@ branchCleanup:
 ####################################################
 pipelineCleanup:
   stage: maintenance
-  cache: []
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'monthlyMaintenance'
       when: always
-    - when: never
-  allow_failure: false
   script:
     - source ./scripts/bash/delete_stale_pipelines.sh
 
@@ -154,19 +120,16 @@ pipelineCleanup:
 ####################################################
 metadataAudit:
   stage: maintenance
-  cache: []
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'metadataAudit'
       when: always
-    - when: never
-  allow_failure: false
   script:
     - echo y | sf plugins install sf-git-ai-meta-insights@latest
     - source ./scripts/bash/metadata_audit.sh
 
 ####################################################
 # Executes GitLab sandbox refresh steps.
-# Org branching model only (recreates the develop/fullqa org branches).
+# Org branching model only (recreates the $DEV_BRANCH/$FULLQA_BRANCH org branches).
 ####################################################
 refreshSbxBranches:
   extends: .maintainer-git
@@ -174,26 +137,22 @@ refreshSbxBranches:
   rules:
     - if: $BRANCHING_MODEL != 'release' && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'refreshSbxBranches'
       when: always
-    - when: never
-  allow_failure: false
   script:
     - source ./scripts/bash/refresh_sandbox_branches.sh
 
 ####################################################
 # Auto-promote AI triage agent MRs.
 # When the configured AI agent service account opens an MR into main,
-# this job opens the two companion MRs (story -> develop, story -> fullqa)
+# this job opens the two companion MRs (story -> $DEV_BRANCH, story -> $FULLQA_BRANCH)
 # required by the 3-branch promotion path. Idempotent: skips targets that
 # already have an open MR from the same source branch.
 # Org branching model only.
 ####################################################
 agentPromoteMR:
   stage: maintenance
-  cache: []
   rules:
     - if: $BRANCHING_MODEL != 'release' && $CI_PIPELINE_SOURCE == 'merge_request_event' && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH && $GITLAB_USER_LOGIN == $AI_AGENT_USERNAME
       when: always
-    - when: never
   allow_failure: true
   script:
     - source ./scripts/bash/promote_agent_mr.sh

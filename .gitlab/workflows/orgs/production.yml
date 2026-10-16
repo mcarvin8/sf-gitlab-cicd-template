@@ -4,12 +4,12 @@
 # Set PRODUCTION_ORG_URL and the PRODUCTION_JWT_* / PRODUCTION_USERNAME / PRODUCTION_INSTANCE_URL variables in GitLab.
 ####################################################
 
-test:unit:prd:
-  extends: .test-unit
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
-      when: always
-    - when: never
+####################################################
+# Org credentials, defined once and shared by every job below.
+# .prd-auth: credentials only (also used by sandboxRefresh and packageBackfillPrd).
+# .prd-org:  credentials + deploy lock + environment URL for jobs that change the org.
+####################################################
+.prd-auth:
   variables:
     AUTH_ALIAS: PRODUCTION
     AUTH_CLIENT_ID: $PRODUCTION_JWT_CLIENT_ID
@@ -17,79 +17,61 @@ test:unit:prd:
     AUTH_USERNAME: $PRODUCTION_USERNAME
     AUTH_INSTANCE_URL: $PRODUCTION_INSTANCE_URL
 
+.prd-org:
+  extends: .prd-auth
+  resource_group: production
+  environment:
+    url: $PRODUCTION_ORG_URL
+
+test:unit:prd:
+  extends: [.test-unit, .prd-auth]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+      when: always
+
 test:postrun:prd:
-  extends: .test-postrun
+  extends: [.test-postrun, .prd-auth]
   rules:
     - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
       when: delayed
       start_in: 90 minutes
-    - when: never
   needs: ["test:unit:prd"]
-  variables:
-    AUTH_ALIAS: PRODUCTION
-    AUTH_CLIENT_ID: $PRODUCTION_JWT_CLIENT_ID
-    AUTH_JWT_KEY_FILE: $PRODUCTION_JWT_KEY
-    AUTH_USERNAME: $PRODUCTION_USERNAME
-    AUTH_INSTANCE_URL: $PRODUCTION_INSTANCE_URL
 
 test:predeploy:prd:
-  extends: .validate-metadata
+  extends: [.validate-metadata, .prd-org]
   stage: test
-  resource_group: production
   rules:
-    - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'develop' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == 'fullqa' || $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == $CI_DEFAULT_BRANCH
-      when: never
+    - !reference [.skip-org-branch-sources, rules]
     - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
       when: manual
+  # Manual jobs default to allow_failure: true; keep validation failures blocking.
   allow_failure: false
-  variables:
-    AUTH_ALIAS: PRODUCTION
-    AUTH_CLIENT_ID: $PRODUCTION_JWT_CLIENT_ID
-    AUTH_JWT_KEY_FILE: $PRODUCTION_JWT_KEY
-    AUTH_USERNAME: $PRODUCTION_USERNAME
-    AUTH_INSTANCE_URL: $PRODUCTION_INSTANCE_URL
   environment:
     name: validate-production
-    url: $PRODUCTION_ORG_URL
 
 deploy:prd:
-  extends: .deploy-metadata
+  extends: [.deploy-metadata, .prd-org]
   stage: deploy
-  resource_group: production
   rules:
     - if: $PRODUCTION_DISABLED
       when: never
+    # packageBackfillPrd commits retrieved production metadata to the default branch
+    # without ci.skip (so prodBackfill still merges it into the sandbox branches);
+    # the metadata already came from production, so don't deploy it back.
     - if: '$CI_COMMIT_MESSAGE =~ /chore\(metadata-retrieval\):/i'
       when: never
     - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'push'
       when: always
-  allow_failure: false
-  variables:
-    AUTH_ALIAS: PRODUCTION
-    AUTH_CLIENT_ID: $PRODUCTION_JWT_CLIENT_ID
-    AUTH_JWT_KEY_FILE: $PRODUCTION_JWT_KEY
-    AUTH_USERNAME: $PRODUCTION_USERNAME
-    AUTH_INSTANCE_URL: $PRODUCTION_INSTANCE_URL
   environment:
     name: production
-    url: $PRODUCTION_ORG_URL
 
 destroy:prd:
-  extends: .delete-metadata
+  extends: [.delete-metadata, .prd-org]
   stage: destroy
-  resource_group: production
   rules:
     - if: $PRODUCTION_DISABLED
       when: never
     - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'web' && $PACKAGE
       when: always
-  allow_failure: false
-  variables:
-    AUTH_ALIAS: PRODUCTION
-    AUTH_CLIENT_ID: $PRODUCTION_JWT_CLIENT_ID
-    AUTH_JWT_KEY_FILE: $PRODUCTION_JWT_KEY
-    AUTH_USERNAME: $PRODUCTION_USERNAME
-    AUTH_INSTANCE_URL: $PRODUCTION_INSTANCE_URL
   environment:
     name: production
-    url: $PRODUCTION_ORG_URL

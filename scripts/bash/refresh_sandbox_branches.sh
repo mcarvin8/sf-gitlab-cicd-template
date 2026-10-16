@@ -50,6 +50,10 @@ check_required_var() {
 }
 
 check_required_var "CI_SERVER_HOST"
+if ! command -v jq &> /dev/null; then
+    print_error "jq is required but not installed."
+    exit 1
+fi
 
 # Configurable branch and CI/CD variable names
 DEV_BRANCH="${DEV_BRANCH:-develop}"
@@ -146,74 +150,54 @@ apply_protection_rules() {
     
     print_info "Applying protection rules to branch: $branch"
     
-    # Use jq if available to properly reconstruct the protection rules
-    if command -v jq &> /dev/null; then
-        # Build the protection request using jq to properly handle arrays and nested objects
-        # Filter arrays to only include fields needed for API: user_id, group_id, or access_level
-        # Remove id, access_level_description, deploy_key_id, etc. as they're not needed for creation
-        # Use allowed_to_push and allowed_to_merge (not push_access_levels/merge_access_levels)
-        # Each entry should have only one field: user_id, group_id, or access_level
-        local protect_data=$(echo "$rules_json" | jq -c --arg branch_name "$branch" '{
-            name: $branch_name,
-            allowed_to_push: [
-                .push_access_levels[]? | 
-                if .user_id != null then {user_id: .user_id}
-                elif .group_id != null then {group_id: .group_id}
-                elif .deploy_key_id != null then {deploy_key_id: .deploy_key_id}
-                else {access_level: .access_level}
-                end
-            ],
-            allowed_to_merge: [
-                .merge_access_levels[]? | 
-                if .user_id != null then {user_id: .user_id}
-                elif .group_id != null then {group_id: .group_id}
-                else {access_level: .access_level}
-                end
-            ],
-            allow_force_push: (.allow_force_push // false),
-            code_owner_approval_required: (.code_owner_approval_required // false)
-        }' 2>/dev/null)
-        
-        if [[ -z "$protect_data" ]]; then
-            print_error "Failed to parse protection rules JSON with jq"
-            return 1
-        fi
-        
-        # Debug: Count user IDs in original rules
-        local original_push_users=$(echo "$rules_json" | jq -r '.push_access_levels[]? | select(.user_id != null) | .user_id' 2>/dev/null | wc -l | tr -d ' ')
-        local original_merge_users=$(echo "$rules_json" | jq -r '.merge_access_levels[]? | select(.user_id != null) | .user_id' 2>/dev/null | wc -l | tr -d ' ')
-        print_info "Original rules - Push users: $original_push_users, Merge users: $original_merge_users"
-        
-        # Debug: Show what we're sending (first 500 chars)
-        print_info "Protection data preview (first 500 chars): $(echo "$protect_data" | head -c 500)..."
-        
-        # Debug: Count user IDs in push and merge access levels (using allowed_to_push/allowed_to_merge)
-        local push_user_count=$(echo "$protect_data" | jq -r '.allowed_to_push[]? | select(.user_id != null) | .user_id' 2>/dev/null | wc -l | tr -d ' ')
-        local merge_user_count=$(echo "$protect_data" | jq -r '.allowed_to_merge[]? | select(.user_id != null) | .user_id' 2>/dev/null | wc -l | tr -d ' ')
-        print_info "Filtered data - Push access levels with user_id: $push_user_count"
-        print_info "Filtered data - Merge access levels with user_id: $merge_user_count"
-        
-        if [[ "$push_user_count" != "$original_push_users" ]] || [[ "$merge_user_count" != "$original_merge_users" ]]; then
-            print_warn "WARNING: User count mismatch! Original: push=$original_push_users, merge=$original_merge_users | Filtered: push=$push_user_count, merge=$merge_user_count"
-        fi
-    else
-        # Fallback: manually extract and build JSON (less reliable but works without jq)
-        print_warn "jq not available, using fallback method (may not preserve all user/group-specific rules)"
-        
-        local allow_force_push=$(echo "$rules_json" | grep -o '"allow_force_push":[^,}]*' | cut -d':' -f2 | tr -d ' ' || echo "false")
-        local code_owner_approval_required=$(echo "$rules_json" | grep -o '"code_owner_approval_required":[^,}]*' | cut -d':' -f2 | tr -d ' ' || echo "false")
-        
-        # Extract push and merge access levels (simplified - may miss user/group-specific access)
-        local push_access_level=$(echo "$rules_json" | grep -o '"push_access_levels":\[{[^}]*"access_level":[0-9]*' | grep -o '"access_level":[0-9]*' | cut -d':' -f2 | head -1 || echo "40")
-        local merge_access_level=$(echo "$rules_json" | grep -o '"merge_access_levels":\[{[^}]*"access_level":[0-9]*' | grep -o '"access_level":[0-9]*' | cut -d':' -f2 | head -1 || echo "40")
-        
-        local protect_data="{"
-        protect_data="${protect_data}\"name\":\"${branch}\""
-        protect_data="${protect_data},\"push_access_levels\":[{\"access_level\":${push_access_level}}]"
-        protect_data="${protect_data},\"merge_access_levels\":[{\"access_level\":${merge_access_level}}]"
-        protect_data="${protect_data},\"allow_force_push\":${allow_force_push}"
-        protect_data="${protect_data},\"code_owner_approval_required\":${code_owner_approval_required}"
-        protect_data="${protect_data}}"
+    # Reconstruct the protection rules (jq is required)
+    # Build the protection request using jq to properly handle arrays and nested objects
+    # Filter arrays to only include fields needed for API: user_id, group_id, or access_level
+    # Remove id, access_level_description, deploy_key_id, etc. as they're not needed for creation
+    # Use allowed_to_push and allowed_to_merge (not push_access_levels/merge_access_levels)
+    # Each entry should have only one field: user_id, group_id, or access_level
+    local protect_data=$(echo "$rules_json" | jq -c --arg branch_name "$branch" '{
+        name: $branch_name,
+        allowed_to_push: [
+            .push_access_levels[]? | 
+            if .user_id != null then {user_id: .user_id}
+            elif .group_id != null then {group_id: .group_id}
+            elif .deploy_key_id != null then {deploy_key_id: .deploy_key_id}
+            else {access_level: .access_level}
+            end
+        ],
+        allowed_to_merge: [
+            .merge_access_levels[]? | 
+            if .user_id != null then {user_id: .user_id}
+            elif .group_id != null then {group_id: .group_id}
+            else {access_level: .access_level}
+            end
+        ],
+        allow_force_push: (.allow_force_push // false),
+        code_owner_approval_required: (.code_owner_approval_required // false)
+    }' 2>/dev/null)
+    
+    if [[ -z "$protect_data" ]]; then
+        print_error "Failed to parse protection rules JSON with jq"
+        return 1
+    fi
+    
+    # Debug: Count user IDs in original rules
+    local original_push_users=$(echo "$rules_json" | jq -r '.push_access_levels[]? | select(.user_id != null) | .user_id' 2>/dev/null | wc -l | tr -d ' ')
+    local original_merge_users=$(echo "$rules_json" | jq -r '.merge_access_levels[]? | select(.user_id != null) | .user_id' 2>/dev/null | wc -l | tr -d ' ')
+    print_info "Original rules - Push users: $original_push_users, Merge users: $original_merge_users"
+    
+    # Debug: Show what we're sending (first 500 chars)
+    print_info "Protection data preview (first 500 chars): $(echo "$protect_data" | head -c 500)..."
+    
+    # Debug: Count user IDs in push and merge access levels (using allowed_to_push/allowed_to_merge)
+    local push_user_count=$(echo "$protect_data" | jq -r '.allowed_to_push[]? | select(.user_id != null) | .user_id' 2>/dev/null | wc -l | tr -d ' ')
+    local merge_user_count=$(echo "$protect_data" | jq -r '.allowed_to_merge[]? | select(.user_id != null) | .user_id' 2>/dev/null | wc -l | tr -d ' ')
+    print_info "Filtered data - Push access levels with user_id: $push_user_count"
+    print_info "Filtered data - Merge access levels with user_id: $merge_user_count"
+    
+    if [[ "$push_user_count" != "$original_push_users" ]] || [[ "$merge_user_count" != "$original_merge_users" ]]; then
+        print_warn "WARNING: User count mismatch! Original: push=$original_push_users, merge=$original_merge_users | Filtered: push=$push_user_count, merge=$merge_user_count"
     fi
     
     local response=$(curl -s -w "\n%{http_code}" --request POST \
@@ -232,7 +216,7 @@ apply_protection_rules() {
         print_info "Verifying applied protection rules..."
         sleep 1  # Brief delay to ensure rules are saved
         local verify_rules=$(get_protection_rules "$branch" 2>/dev/null)
-        if [[ -n "$verify_rules" ]] && command -v jq &> /dev/null; then
+        if [[ -n "$verify_rules" ]]; then
             local verified_push_users=$(echo "$verify_rules" | jq -r '.push_access_levels[]? | select(.user_id != null) | .user_id' 2>/dev/null | wc -l | tr -d ' ')
             local verified_merge_users=$(echo "$verify_rules" | jq -r '.merge_access_levels[]? | select(.user_id != null) | .user_id' 2>/dev/null | wc -l | tr -d ' ')
             print_info "Verified - Push access levels with user_id: $verified_push_users"

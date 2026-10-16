@@ -18,6 +18,7 @@ Docker image with Salesforce CLI (`sf`) preinstalled, used by the CI/CD pipeline
 - `sf-package-list`
 - `apextestlist`
 - Node.js, git, jq, curl
+- Linux image only: `code-analyzer` and `sf-cat` plugins, plus Java 17 and Python 3 for Code Analyzer's PMD and Flow engines
 
 ## Pull
 
