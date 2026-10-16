@@ -1,4 +1,10 @@
-FROM node:22-bookworm-slim
+# Salesforce's official full CLI image: sf CLI with its own Node.js and npm,
+# OpenJDK 11, jq, git, curl and Python 3.10 on heroku/heroku:22 (Ubuntu 22.04).
+# Java and Python cover Code Analyzer's PMD (Java 11+) and Flow (Python 3.10+)
+# engines. latest-full tracks the latest Salesforce CLI release; pin an exact tag
+# (e.g. salesforce/cli:2.154.4-full) for repeatable builds.
+# https://developer.salesforce.com/docs/platform/sfdx-setup/guide/sfdx-setup-docker.html
+FROM salesforce/cli:latest-full
 
 # Set Salesforce CLI Environment Variables
 # https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_dev_cli_env_variables.htm
@@ -16,19 +22,13 @@ ENV SF_AUTOUPDATE_DISABLE=true \
     SF_CI_HEARTBEAT_FREQUENCY_MS=60000 \
     NODE_NO_WARNINGS=1
 
-# Install Salesforce CLI and other required software (git, jq, curl); nodejs
-# already ships in the base image. Java (PMD engine), Python (Flow engine) and the
-# code-analyzer/sf-cat plugins are for the code-analyzer-check job, so it doesn't
-# install them on every merge request.
+# Install the pipeline's sf CLI plugins. code-analyzer and sf-cat are for the
+# code-analyzer-check job, so it doesn't install them on every merge request.
 # Print Salesforce CLI version in format accepted for Salesforce CLI bugs on GitHub
-RUN apt-get update && apt-get install -y curl jq git openjdk-17-jre-headless python3 && \
-    rm -rf /var/lib/apt/lists/* && \
-    npm install --global npm@latest && \
-    npm install --global @salesforce/cli@latest-rc && \
-    echo y | sf plugins install sfdx-git-delta@^7.3.0 && \
+RUN echo y | sf plugins install sfdx-git-delta@^7.3.0 && \
     echo y | sf plugins install apex-code-coverage-transformer@latest && \
     echo y | sf plugins install sf-package-list@latest && \
     echo y | sf plugins install apextestlist@^1.15.0 && \
     sf plugins install code-analyzer@latest && \
     echo y | sf plugins install sf-cat@latest && \
-    { sf version --verbose --json || true; }
+    sf version --verbose --json
