@@ -16,8 +16,7 @@ ENV SF_AUTOUPDATE_DISABLE=true \
     SF_CI_HEARTBEAT_FREQUENCY_MS=60000 \
     NODE_NO_WARNINGS=1
 
-# Install the pipeline's sf CLI plugins. code-analyzer and sf-cat are for the
-# code-analyzer-check job, so it doesn't install them on every merge request.
+# Install the pipeline's sf CLI plugins
 # Print Salesforce CLI version in format accepted for Salesforce CLI bugs on GitHub
 RUN echo y | sf plugins install sfdx-git-delta@^7.3.0 && \
     echo y | sf plugins install apex-code-coverage-transformer@latest && \
