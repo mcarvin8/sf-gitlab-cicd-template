@@ -41,7 +41,7 @@
 ####################################################
 # Scan changed Apex and Flows with Salesforce Code Analyzer (PMD + Flow engines).
 # Java, Python and the code-analyzer/sf-cat plugins are baked into the default
-# pipeline image (see Dockerfile); on other images (e.g. .sf-cli-slim) they are
+# pipeline image (see Dockerfile); on other images (e.g. salesforce/cli:latest-full) they are
 # installed at runtime.
 ####################################################
 code-analyzer-check:
@@ -169,5 +169,7 @@ pre-merge-check:
     - !reference [.skip-org-branch-sources, rules]
     - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $FULLQA_BRANCH || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $DEV_BRANCH || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH || ($BRANCHING_MODEL == 'release' && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^release\//)
       when: always
+  before_script:
+    - !reference [.install-sf-plugins, before_script]
   script:
     - source ./scripts/bash/verify_branch_compliance.sh

@@ -4,51 +4,26 @@
 ####################################################
 
 ####################################################
-# Install the four sf CLI plugins the Dockerfile bakes in. Skips any plugin
-# already installed, so it is a near no-op on the custom Dockerfile image.
-# Reuse via !reference in jobs that define their own before_script.
+# Install the four sf CLI plugins the Dockerfile bakes in, for images that
+# don't have them (e.g. salesforce/cli:latest-full). Runs only when
+# SF_INSTALL_PLUGINS is "true" (see .gitlab-ci.yml) and skips plugins already
+# installed. Pulled in by .authenticate and pre-merge-check, which covers every
+# job that uses these plugins.
 ####################################################
 .install-sf-plugins:
   before_script:
     - |
-      installed=$(sf plugins 2>/dev/null)
-      for plugin in "sfdx-git-delta@^7.3.0" "apex-code-coverage-transformer@latest" "sf-package-list@latest" "apextestlist@^1.15.0"; do
-        name="${plugin%@*}"
-        if echo "$installed" | grep -q "^${name} "; then
-          echo "Plugin already installed: $name"
-        else
-          echo y | sf plugins install "$plugin"
-        fi
-      done
-      sf version --verbose --json || true
-
-####################################################
-# Run a job on Salesforce's prebuilt sf CLI image instead of the custom
-# Dockerfile image - no Docker-in-Docker build or container registry needed.
-# Plugins are installed at runtime on every job (see .install-sf-plugins).
-# Env vars mirror the Dockerfile. The image ships sf (bundled Node, no npm),
-# git, curl, jq, and Java 11 on heroku/heroku:22, running as root.
-# Jobs that set their own before_script override this one; prepend
-# `- !reference [.install-sf-plugins, before_script]` there instead.
-####################################################
-.sf-cli-slim:
-  image: salesforce/cli:latest-slim
-  variables:
-    SF_AUTOUPDATE_DISABLE: "true"
-    SF_USE_GENERIC_UNIX_KEYCHAIN: "true"
-    SF_DOMAIN_RETRY: "300"
-    SF_PROJECT_AUTOUPDATE_DISABLE_FOR_PACKAGE_CREATE: "true"
-    SF_PROJECT_AUTOUPDATE_DISABLE_FOR_PACKAGE_VERSION_CREATE: "true"
-    SF_DISABLE_DNS_CHECK: "true"
-    SF_DISABLE_SOURCE_MEMBER_POLLING: "true"
-    SF_HIDE_RELEASE_NOTES: "true"
-    SF_HIDE_RELEASE_NOTES_FOOTER: "true"
-    SF_SKIP_NEW_VERSION_CHECK: "true"
-    SF_CONTAINER_MODE: "true"
-    SF_CI_HEARTBEAT_FREQUENCY_MS: "60000"
-    NODE_NO_WARNINGS: "1"
-  before_script:
-    - !reference [.install-sf-plugins, before_script]
+      if [ "${SF_INSTALL_PLUGINS:-false}" = "true" ]; then
+        installed=$(sf plugins 2>/dev/null)
+        for plugin in "sfdx-git-delta@^7.3.0" "apex-code-coverage-transformer@latest" "sf-package-list@latest" "apextestlist@^1.15.0"; do
+          name="${plugin%@*}"
+          if echo "$installed" | grep -q "^${name} "; then
+            echo "Plugin already installed: $name"
+          else
+            echo y | sf plugins install "$plugin"
+          fi
+        done
+      fi
 
 ####################################################
 # Shared rule: skip MR pipelines whose source is a long-lived org branch
@@ -83,11 +58,13 @@
     - git for-each-ref --format='%(refname:short)' refs/heads | xargs -r git branch -D
 
 ####################################################
-# Authenticate to a Salesforce org.
+# Authenticate to a Salesforce org (installing the sf CLI plugins first when
+# SF_INSTALL_PLUGINS is "true").
 # Used as a building block via !reference in prepare-deploy and prepare-destroy.
 ####################################################
 .authenticate:
   before_script:
+    - !reference [.install-sf-plugins, before_script]
     - sf org login jwt --client-id "$AUTH_CLIENT_ID" --jwt-key-file "$AUTH_JWT_KEY_FILE" --username "$AUTH_USERNAME" --instance-url "$AUTH_INSTANCE_URL" --set-default --alias "$AUTH_ALIAS"
 
 ####################################################
