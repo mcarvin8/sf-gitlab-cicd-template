@@ -1,9 +1,3 @@
-# Salesforce's official full CLI image: sf CLI with its own Node.js and npm,
-# OpenJDK 11, jq, git, curl and Python 3.10 on heroku/heroku:22 (Ubuntu 22.04).
-# Java and Python cover Code Analyzer's PMD (Java 11+) and Flow (Python 3.10+)
-# engines. latest-full tracks the latest Salesforce CLI release; pin an exact tag
-# (e.g. salesforce/cli:2.154.4-full) for repeatable builds.
-# https://developer.salesforce.com/docs/platform/sfdx-setup/guide/sfdx-setup-docker.html
 FROM salesforce/cli:latest-full
 
 # Set Salesforce CLI Environment Variables
