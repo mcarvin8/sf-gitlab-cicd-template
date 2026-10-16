@@ -1,16 +1,15 @@
-name: Publish Docker Images
+name: Publish Docker Image
 
 on:
   push:
     branches: [main]
     paths:
       - Dockerfile
-      - Dockerfile.windows
       - .dockerignore
   schedule:
     # Rebuild twice a month (~biweekly; cron has no native every-N-weeks
-    # interval) so latest/windows tags stay current on sf CLI and plugin
-    # versions even when the Dockerfiles themselves don't change.
+    # interval) so the image stays current on sf CLI and plugin versions
+    # even when the Dockerfile itself doesn't change.
     - cron: "0 6 1,15 * *"
   workflow_dispatch: {}
 
@@ -37,44 +36,3 @@ jobs:
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:linux
 
-  windows:
-    # Pinned to Windows Server 2022 to match the ltsc2022 base image in
-    # Dockerfile.windows: Windows containers build with process isolation only
-    # when the host OS version matches. windows-latest is Windows Server 2025.
-    runs-on: windows-2022
-    steps:
-      - uses: actions/checkout@v7
-
-      # The runner's Docker Engine service can still be starting (or stopped)
-      # when the job begins, which fails with "failed to connect to the docker
-      # API at npipe:////./pipe/docker_engine". Start it if needed and poll
-      # until it responds, before anything talks to the daemon.
-      - name: Wait for Docker
-        run: |
-          $service = Get-Service -Name docker -ErrorAction SilentlyContinue
-          if ($service -and $service.Status -ne 'Running') {
-            Write-Host "Docker service is $($service.Status); starting it"
-            Start-Service -Name docker
-          }
-          $deadline = (Get-Date).AddMinutes(5)
-          while ($true) {
-            docker info *> $null
-            if ($LASTEXITCODE -eq 0) { break }
-            if ((Get-Date) -gt $deadline) { throw "Docker daemon did not become ready within 5 minutes" }
-            Start-Sleep -Seconds 5
-          }
-          docker version
-
-      - name: Docker login
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: echo $env:DOCKERHUB_TOKEN | docker login -u $env:DOCKERHUB_USERNAME --password-stdin
-
-      - name: Build
-        run: docker build -f Dockerfile.windows -t "${{ env.IMAGE_NAME }}:windows" -t "${{ env.IMAGE_NAME }}:windows-ltsc2022" .
-
-      - name: Push
-        run: |
-          docker push "${{ env.IMAGE_NAME }}:windows"
-          docker push "${{ env.IMAGE_NAME }}:windows-ltsc2022"
