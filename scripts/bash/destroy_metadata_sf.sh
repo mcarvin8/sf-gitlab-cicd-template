@@ -1,31 +1,23 @@
 #!/bin/bash
 ################################################################################
 # Script: destroy_metadata_sf.sh
-# Description: Executes destructive changes deployment to Salesforce, removing
-#              metadata components specified in the destructive changes package.
-#              Runs tests for Apex-related destructive changes in production.
+# Description: Executes a standalone destructive changes deployment to Salesforce
+#              (web destroy pipeline), removing the metadata components listed in
+#              the destructive changes package. Runs tests for Apex-related
+#              destructive changes in production. Git-tracked deletions are
+#              deployed with the delta package instead (see deploy_metadata_sf.sh).
 # Usage: Called from CI/CD pipeline during destroy stage
 # Environment Variables Required:
 #   - testclasses: space-separated test class names from DESTRUCTIVE_TESTS env var, or "not a test" for non-Apex or non-production
-#   - DEPLOY_PACKAGE: Path to deployment package (pre-destructive changes)
-#   - DESTRUCTIVE_PACKAGE: Path to destructive changes manifest
+#   - DEPLOY_PACKAGE: Path to the destructive changes manifest
+#   - DESTRUCTIVE_PACKAGE: Path to the (empty) deployment manifest
 #   - DEPLOY_TIMEOUT
-# Optional:
-#   - DELTA_BASE_BRANCH: set on cumulative release-branch destroys (see .delete-metadata-push)
 ################################################################################
 set -e
 
-# Cumulative release-branch destroys re-send components already deleted by an
-# earlier push. Salesforce reports those as "not found" warnings, which fail the
-# whole destructive deploy unless warnings are ignored.
-ignore_warnings=""
-if [ -n "${DELTA_BASE_BRANCH:-}" ]; then
-    ignore_warnings="--ignore-warnings"
-fi
-
 # Destructive apex deployments in production only require tests
 if [ "$testclasses" == "not a test" ]; then
-    sf project deploy start --pre-destructive-changes $DEPLOY_PACKAGE --manifest $DESTRUCTIVE_PACKAGE -w $DEPLOY_TIMEOUT --verbose $ignore_warnings
+    sf project deploy start --pre-destructive-changes $DEPLOY_PACKAGE --manifest $DESTRUCTIVE_PACKAGE -w $DEPLOY_TIMEOUT --verbose
 else
-    sf project deploy start --pre-destructive-changes $DEPLOY_PACKAGE --manifest $DESTRUCTIVE_PACKAGE -l RunSpecifiedTests -t $testclasses -w $DEPLOY_TIMEOUT --verbose $ignore_warnings
+    sf project deploy start --pre-destructive-changes $DEPLOY_PACKAGE --manifest $DESTRUCTIVE_PACKAGE -l RunSpecifiedTests -t $testclasses -w $DEPLOY_TIMEOUT --verbose
 fi

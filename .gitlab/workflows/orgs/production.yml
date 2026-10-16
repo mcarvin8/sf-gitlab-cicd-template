@@ -93,25 +93,3 @@ destroy:prd:
   environment:
     name: production
     url: $PRODUCTION_ORG_URL
-
-destroy:prd:push:
-  extends: .delete-metadata-push
-  stage: destroy
-  resource_group: production
-  rules:
-    - if: $PRODUCTION_DISABLED
-      when: never
-    - if: '$CI_COMMIT_MESSAGE =~ /chore\(metadata-retrieval\):/i'
-      when: never
-    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'push'
-      when: always
-  allow_failure: true
-  variables:
-    AUTH_ALIAS: PRODUCTION
-    AUTH_CLIENT_ID: $PRODUCTION_JWT_CLIENT_ID
-    AUTH_JWT_KEY_FILE: $PRODUCTION_JWT_KEY
-    AUTH_USERNAME: $PRODUCTION_USERNAME
-    AUTH_INSTANCE_URL: $PRODUCTION_INSTANCE_URL
-  environment:
-    name: production
-    url: $PRODUCTION_ORG_URL

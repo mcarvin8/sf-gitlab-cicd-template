@@ -28,7 +28,8 @@ Edit every job in the new file. Replace all `dev` / `develop` / `DEV` references
 - `test:predeploy:[ORG]`
 - `deploy:[ORG]`
 - `destroy:[ORG]` (web pipeline)
-- `destroy:[ORG]:push` (push pipeline)
+
+Git-tracked deletions need no job of their own: `deploy:[ORG]` and `test:predeploy:[ORG]` include them (see `AUTO_DESTROY` in `.gitlab-ci.yml`).
 
 Also add `test:predeploy:[ORG]` (with `optional: true`) to the `needs` list of the `quality` job in `test-quality-jobs.yml`, so SonarQube receives that org's validation coverage.
 
@@ -49,7 +50,7 @@ Also add `test:predeploy:[ORG]` (with `optional: true`) to the `needs` list of t
 
 #### Release branching model
 
-The template below covers the org branching model. If you set `BRANCHING_MODEL: "release"` and want the new sandbox to receive `release/*` deploys, copy the `$BRANCHING_MODEL == 'release'` rules from `dev.yml` (automatic deploy) or `fullqa.yml` (manual deploy that `needs` the previous org's deploy) into the new org's `test:predeploy`, `deploy`, and `destroy:...:push` jobs, and point `needs` at the org that should be deployed first. Keep `DELTA_BASE_BRANCH: $CI_DEFAULT_BRANCH` in the deploy/destroy rules. If the new org should be checked by `pre-merge-check`, also set `DEV_DEPLOY_JOB`/`FULLQA_DEPLOY_JOB` accordingly.
+The template below covers the org branching model. If you set `BRANCHING_MODEL: "release"` and want the new sandbox to receive `release/*` deploys, copy the `$BRANCHING_MODEL == 'release'` rules from `dev.yml` (automatic deploy) or `fullqa.yml` (manual deploy that `needs` the previous org's deploy) into the new org's `test:predeploy` and `deploy` jobs, and point `needs` at the org that should be deployed first. Keep `DELTA_BASE_BRANCH: $CI_DEFAULT_BRANCH` in the deploy rules. If the new org should be checked by `pre-merge-check`, also set `DEV_DEPLOY_JOB`/`FULLQA_DEPLOY_JOB` accordingly.
 
 ### Step 3: Include the New Org File
 
@@ -182,28 +183,6 @@ destroy:[ORG_NAME]:
   environment:
     name: [ORG_NAME]
     url: $[ORG_URL_VAR]
-
-destroy:[ORG_NAME]:push:
-  extends: .delete-metadata-push
-  stage: destroy
-  resource_group: [ORG_NAME]
-  rules:
-    - if: $[DISABLED_VAR]
-      when: never
-    - if: '$CI_COMMIT_MESSAGE =~ /chore\(metadata-retrieval\):/i'
-      when: never
-    - if: $CI_COMMIT_REF_NAME == '[BRANCH_NAME]' && $CI_PIPELINE_SOURCE == 'push'
-      when: always
-  allow_failure: true
-  variables:
-    AUTH_ALIAS: [AUTH_ALIAS]
-    AUTH_CLIENT_ID: $[JWT_CLIENT_ID_VAR]
-    AUTH_JWT_KEY_FILE: $[JWT_KEY_VAR]
-    AUTH_USERNAME: $[USERNAME_VAR]
-    AUTH_INSTANCE_URL: $[INSTANCE_URL_VAR]
-  environment:
-    name: [ORG_NAME]
-    url: $[ORG_URL_VAR]
 ```
 
 ### Template Placeholders
@@ -234,10 +213,11 @@ Edit the org's YAML file directly. Changes are isolated — no other files need 
 
 ## Troubleshooting
 
-| Symptom                     | Check                                                                                |
-| --------------------------- | ------------------------------------------------------------------------------------ |
-| Jobs not appearing          | `include:` line added to `.gitlab-ci.yml`?                                           |
-| Auth failures               | JWT client ID, File-type private key, username, and My Domain URL variables are set? |
-| Wrong jobs triggering       | Branch names in rules match your git branches?                                       |
-| Resource group conflicts    | Resource group names unique per org?                                                 |
-| Push destroy always skipped | Expected — `allow_failure: true`, exits 0 when delta has no destructive types        |
+| Symptom                       | Check                                                                                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Jobs not appearing            | `include:` line added to `.gitlab-ci.yml`?                                                              |
+| Auth failures                 | JWT client ID, File-type private key, username, and My Domain URL variables are set?                    |
+| Wrong jobs triggering         | Branch names in rules match your git branches?                                                          |
+| Resource group conflicts      | Resource group names unique per org?                                                                    |
+| Deleted files not deleted     | `AUTO_DESTROY` is `"true"`? The job log prints a "Destructive Changes" list when deletions are included |
+| Delete fails on a dependency  | Needs the other order — add `[pre-destructive]` to the commit message / MR title, or use a web destroy  |

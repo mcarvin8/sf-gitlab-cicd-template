@@ -4,7 +4,7 @@
 # Set FULLQA_ORG_URL and the FULLQA_JWT_* / FULLQA_USERNAME / FULLQA_INSTANCE_URL variables in GitLab.
 # Org branching model: the fullqa branch maps to this org.
 # Release branching model (BRANCHING_MODEL=release): MRs into release/* validate
-# here, and pushes to release/* create manual deploy/destroy jobs. deploy:fullqa
+# here, and pushes to release/* create a manual deploy job. deploy:fullqa
 # needs deploy:dev, so it can only be played once the same commit is in Dev.
 # Release deploys diff from the merge-base with the default branch
 # (DELTA_BASE_BRANCH), so playing the latest pipeline deploys the whole release
@@ -100,35 +100,6 @@ destroy:fullqa:
     - if: $CI_COMMIT_REF_NAME == 'fullqa' && $CI_PIPELINE_SOURCE == 'web' && $PACKAGE
       when: always
   allow_failure: false
-  variables:
-    AUTH_ALIAS: FULLQA
-    AUTH_CLIENT_ID: $FULLQA_JWT_CLIENT_ID
-    AUTH_JWT_KEY_FILE: $FULLQA_JWT_KEY
-    AUTH_USERNAME: $FULLQA_USERNAME
-    AUTH_INSTANCE_URL: $FULLQA_INSTANCE_URL
-  environment:
-    name: fullqa
-    url: $FULLQA_ORG_URL
-
-destroy:fullqa:push:
-  extends: .delete-metadata-push
-  stage: destroy
-  resource_group: fullqa
-  rules:
-    - if: $FULLQA_DISABLED
-      when: never
-    - if: '$CI_COMMIT_MESSAGE =~ /chore\(metadata-retrieval\):/i'
-      when: never
-    - if: $CI_COMMIT_REF_NAME == 'fullqa' && $CI_PIPELINE_SOURCE == 'push'
-      when: always
-    - if: $BRANCHING_MODEL == 'release' && $CI_COMMIT_BRANCH =~ /^release\// && $CI_PIPELINE_SOURCE == 'push' && $CI_COMMIT_BEFORE_SHA != '0000000000000000000000000000000000000000'
-      when: manual
-      needs:
-        - job: "destroy:dev:push"
-          optional: true
-      variables:
-        DELTA_BASE_BRANCH: $CI_DEFAULT_BRANCH
-  allow_failure: true
   variables:
     AUTH_ALIAS: FULLQA
     AUTH_CLIENT_ID: $FULLQA_JWT_CLIENT_ID

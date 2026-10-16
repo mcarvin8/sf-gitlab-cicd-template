@@ -93,6 +93,13 @@
 # release and a skipped/failed/manual run can't leave earlier pushes undeployed.
 # DEPLOY_PACKAGE defaults to sfdx-git-delta's own output path (package/package.xml),
 # so no copy step is needed.
+# Deletions in the same delta ($DESTRUCTIVE_CHANGES) ride along in the same
+# deployment/validation when AUTO_DESTROY is "true", so additions, changes and
+# deletions succeed or fail together. Post-destructive by default (references
+# are removed before the component is deleted); "[pre-destructive]" in the
+# commit message or MR title, or DESTRUCTIVE_MODE=pre, deletes first instead.
+# Apex deletions in production with no Apex in the constructive package run
+# DESTRUCTIVE_TESTS, since apextestlist has nothing to resolve tests from.
 # Requires: sfdx-git-delta >= 7.3.0 (adds --merge-base), apextestlist >= 1.15.0
 # (adds -e/--fail-on-empty manifest scanning, so the plugin itself fails the
 # job when the manifest has Apex but no resolvable tests).
@@ -117,6 +124,29 @@
       done < <(find . -path '*/connectedApps/*.connectedApp-meta.xml' -type f)
       testclasses=$(sf apextests list --format sf -x "$DEPLOY_PACKAGE" --no-warnings --fail-on-empty)
       [ -z "$testclasses" ] && testclasses="not a test"
+    - |
+      destructive_flags=""
+      if [ "$AUTO_DESTROY" == "true" ] && grep -q '<types>' "$DESTRUCTIVE_CHANGES" 2>/dev/null; then
+        destructive_mode="${DESTRUCTIVE_MODE:-post}"
+        if [[ "${CI_COMMIT_MESSAGE:-} ${CI_MERGE_REQUEST_TITLE:-}" == *"[pre-destructive]"* ]]; then
+          destructive_mode="pre"
+        fi
+        if [ "$destructive_mode" != "pre" ] && [ "$destructive_mode" != "post" ]; then
+          echo "ERROR: DESTRUCTIVE_MODE must be \"pre\" or \"post\", got \"$destructive_mode\"."
+          exit 1
+        fi
+        destructive_flags="--${destructive_mode}-destructive-changes $DESTRUCTIVE_CHANGES"
+        echo "=== Destructive Changes (${destructive_mode}-destructive) ==="
+        sf sfpl list -x "$DESTRUCTIVE_CHANGES" || true
+        echo "=========================="
+        if [ "$testclasses" == "not a test" ] && [[ "$CI_ENVIRONMENT_NAME" == *production ]] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DESTRUCTIVE_CHANGES"; then
+          if [ -z "$DESTRUCTIVE_TESTS" ]; then
+            echo "ERROR: DESTRUCTIVE_TESTS is not set. Set it to a space-separated list of test classes before destroying Apex in production."
+            exit 1
+          fi
+          testclasses=$(printf -- '--tests %s ' $DESTRUCTIVE_TESTS)
+        fi
+      fi
 
 ####################################################
 # Validate metadata against a Salesforce org (MR pipelines).
@@ -183,6 +213,9 @@
 
 ####################################################
 # Delete metadata in a Salesforce org (web pipeline, $PACKAGE provided).
+# Standalone destructive deployment, independent of the git delta, for
+# deletions that need their own ordering or aren't represented in git.
+# Git-tracked deletions deploy with the delta instead (see .prepare-deploy).
 ####################################################
 .delete-metadata:
   extends: .prepare-destroy
@@ -190,44 +223,6 @@
     DEPLOY_PACKAGE: "destructiveChanges/destructiveChanges.xml"
     DESTRUCTIVE_PACKAGE: "destructiveChanges/package.xml"
   script:
-    - source ./scripts/bash/destroy_metadata_sf.sh
-  after_script:
-    - source ./scripts/bash/deploy_slack_status.sh; share_slack_update_build
-
-####################################################
-# Destroy metadata via sfdx-git-delta on push pipelines.
-# allow_failure: true on callers — exits 0 when delta has no destructive types.
-# Honors DELTA_BASE_BRANCH the same way as .prepare-deploy.
-####################################################
-.delete-metadata-push:
-  before_script:
-    - !reference [.authenticate, before_script]
-    - |
-      if [ -n "${DELTA_BASE_BRANCH:-}" ]; then
-        sf sgd source delta --from "origin/${DELTA_BASE_BRANCH}" --merge-base --output-dir .
-      else
-        sf sgd source delta --from "$CI_COMMIT_BEFORE_SHA" --output-dir .
-      fi
-    - |
-      if [ "$CI_ENVIRONMENT_NAME" == "production" ] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
-        if [ -n "$DESTRUCTIVE_TESTS" ]; then
-          testclasses="$DESTRUCTIVE_TESTS"
-        else
-          echo "ERROR: DESTRUCTIVE_TESTS is not set. Set it to a space-separated list of test classes before destroying Apex in production."
-          exit 1
-        fi
-      else
-        testclasses="not a test"
-      fi
-  variables:
-    DEPLOY_PACKAGE: "destructiveChanges/destructiveChanges.xml"
-    DESTRUCTIVE_PACKAGE: "destructiveChanges/package.xml"
-  script:
-    - |
-      if ! grep -q '<types>' "$DEPLOY_PACKAGE" 2>/dev/null; then
-        echo "No destructive types in git delta, skipping destroy."
-        exit 0
-      fi
     - source ./scripts/bash/destroy_metadata_sf.sh
   after_script:
     - source ./scripts/bash/deploy_slack_status.sh; share_slack_update_build
