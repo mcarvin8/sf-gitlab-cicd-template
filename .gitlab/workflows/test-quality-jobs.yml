@@ -62,14 +62,12 @@ code-analyzer-check:
       when: always
   script:
     # Java is required by the PMD engine, Python by the Flow engine. Each install
-    # is skipped when the image already provides it.
+    # is skipped when the image already provides it. The code-analyzer and
+    # sf-cat plugins must already be in the image (see Dockerfile).
     - |
       if ! command -v java >/dev/null || ! command -v python3 >/dev/null; then
         apt-get update && apt-get install -y openjdk-17-jre-headless python3
       fi
-      installed=$(sf plugins 2>/dev/null)
-      echo "$installed" | grep -q "^code-analyzer " || sf plugins install code-analyzer@latest
-      echo "$installed" | grep -q "^sf-cat " || { echo y | sf plugins install sf-cat@latest; }
     # Code Analyzer tags every rule declared in a custom ruleset with the
     # ruleset's own `name` attribute (spaces stripped) -- default_apex.xml's
     # <ruleset name="Enforced Apex Rules"> becomes the "EnforcedApexRules" tag.
