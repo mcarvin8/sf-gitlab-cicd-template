@@ -41,8 +41,8 @@
 ####################################################
 # Scan changed Apex and Flows with Salesforce Code Analyzer (PMD + Flow engines).
 # Java, Python and the code-analyzer/sf-cat plugins are baked into the default
-# pipeline image (see Dockerfile); on other images (e.g. salesforce/cli:latest-full) they are
-# installed at runtime.
+# pipeline image (see Dockerfile). salesforce/cli:latest-full ships Java and
+# Python; with SF_INSTALL_PLUGINS "true" .install-sf-plugins adds the plugins.
 ####################################################
 code-analyzer-check:
   stage: quality
@@ -60,9 +60,10 @@ code-analyzer-check:
       when: always
     - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'fullQualityCodeScan'
       when: always
+  before_script:
+    - !reference [.install-sf-plugins, before_script]
   script:
-    # The image must provide Java (PMD engine), Python (Flow engine) and the
-    # code-analyzer and sf-cat plugins (see Dockerfile).
+    # The image must provide Java (PMD engine) and Python (Flow engine).
     # Code Analyzer tags every rule declared in a custom ruleset with the
     # ruleset's own `name` attribute (spaces stripped) -- default_apex.xml's
     # <ruleset name="Enforced Apex Rules"> becomes the "EnforcedApexRules" tag.

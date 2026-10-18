@@ -1,11 +1,13 @@
 ####################################################
 # Default Docker image for all jobs.
-# Built from the included Dockerfile by the build job. Alternatives:
-#   - mcarvin8/sf-cli:latest (prebuilt from the same Dockerfile on Docker Hub)
+# Prebuilt from the included Dockerfile and published to Docker Hub, so the
+# pipeline works on the first run. Alternatives:
+#   - $CI_REGISTRY_IMAGE:$CI_DEFAULT_BRANCH, built into your own registry by the
+#     build job (run it once, e.g. via the dockerBuild schedule, before switching)
 #   - salesforce/cli:latest-full with SF_INSTALL_PLUGINS: "true" below, when you
 #     can't build images or pull third-party ones (plugins install on every job)
 ####################################################
-image: $CI_REGISTRY_IMAGE:main
+image: mcarvin8/sf-cli:latest
 
 ####################################################
 # Default runner tag applied to every job unless overridden.
@@ -47,7 +49,7 @@ stages:
 variables:
   # Set to "true" when the job image lacks the pipeline's sf CLI plugins (e.g.
   # salesforce/cli:latest-full); every job that runs sf then installs them first
-  # (see .install-sf-plugins). Leave "false" for the Dockerfile / mcarvin8/sf-cli image.
+  # (see .install-sf-plugins). Leave "false" for the mcarvin8/sf-cli / Dockerfile image.
   SF_INSTALL_PLUGINS: "false"
   # Salesforce CLI settings for CI, applied whatever the job image (the Dockerfiles
   # set the same values).
