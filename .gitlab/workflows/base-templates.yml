@@ -116,24 +116,13 @@
     - source ./scripts/bash/deploy_slack_status.sh; share_slack_update_build
 
 ####################################################
-# Prepare a web destroy job: convert $PACKAGE (sf-package-list format) to XML
-# and resolve test classes from DESTRUCTIVE_TESTS for production Apex destroys.
+# Prepare a web destroy job: convert $PACKAGE (sf-package-list format) to XML.
+# Production Apex destroys resolve DESTRUCTIVE_TESTS in destroy_metadata_sf.sh.
 ####################################################
 .prepare-destroy:
   before_script:
     - !reference [.authenticate, before_script]
     - source ./scripts/bash/create_destroy_package.sh
-    - |
-      if [ "$CI_ENVIRONMENT_NAME" == "production" ] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
-        if [ -n "$DESTRUCTIVE_TESTS" ]; then
-          testclasses="$DESTRUCTIVE_TESTS"
-        else
-          echo "ERROR: DESTRUCTIVE_TESTS is not set. Set it to a space-separated list of test classes before destroying Apex in production."
-          exit 1
-        fi
-      else
-        testclasses=""
-      fi
 
 ####################################################
 # Delete metadata in a Salesforce org (web pipeline, $PACKAGE provided).
