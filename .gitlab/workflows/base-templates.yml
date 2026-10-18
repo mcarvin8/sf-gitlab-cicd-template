@@ -6,22 +6,16 @@
 ####################################################
 # Install the four sf CLI plugins the Dockerfile bakes in, for images that
 # don't have them (e.g. salesforce/cli:latest-full). Runs only when
-# SF_INSTALL_PLUGINS is "true" (see .gitlab-ci.yml) and skips plugins already
-# installed. Pulled in by .authenticate and pre-merge-check, which covers every
-# job that uses these plugins.
+# SF_INSTALL_PLUGINS is "true" (see .gitlab-ci.yml) and force-installs every
+# plugin, whatever the base image already has. Pulled in by .authenticate and
+# pre-merge-check, which covers every job that uses these plugins.
 ####################################################
 .install-sf-plugins:
   before_script:
     - |
       if [ "${SF_INSTALL_PLUGINS:-false}" = "true" ]; then
-        installed=$(sf plugins 2>/dev/null)
         for plugin in "sfdx-git-delta@^7.3.0" "apex-code-coverage-transformer@latest" "sf-package-list@latest" "apextestlist@^1.15.0"; do
-          name="${plugin%@*}"
-          if echo "$installed" | grep -q "^${name} "; then
-            echo "Plugin already installed: $name"
-          else
-            echo y | sf plugins install "$plugin"
-          fi
+          echo y | sf plugins install --force "$plugin"
         done
       fi
 
