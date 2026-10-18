@@ -6,7 +6,7 @@
 ####################################################
 # Base templates for running all local Apex tests on a schedule.
 # Trigger: scheduled pipeline with $JOB_NAME=unitTest on the org branch.
-# Org-specific jobs in orgs/<org>.yml extend these and supply JWT credentials,
+# Org jobs from orgs/org.yml (one include per org) extend these and supply JWT credentials,
 # AUTH_ALIAS, branch rule, and needs reference.
 ####################################################
 .test-unit:

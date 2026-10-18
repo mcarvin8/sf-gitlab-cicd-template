@@ -53,7 +53,7 @@ prodBackfill:
 # ($JOB_NAME == sbxBackfill); both jobs run together and do not share git state.
 # Sandbox backfills are org branching model only; packageBackfillPrd overrides
 # these rules and runs in both models.
-# Org credentials come from the .<org>-auth templates in orgs/<org>.yml.
+# Org credentials come from the .<org>-auth templates defined by each orgs/org.yml include.
 ####################################################
 .packageBackfillSbxBase:
   extends: .maintainer-git

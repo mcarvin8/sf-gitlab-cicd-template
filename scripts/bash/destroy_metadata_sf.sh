@@ -13,13 +13,13 @@
 #   - DEPLOY_TIMEOUT
 #   - DESTRUCTIVE_TESTS: space-separated test class names; required only when
 #     destroying ApexClass/ApexTrigger in production
-#   - CI_ENVIRONMENT_NAME
+#   - IS_PRODUCTION: "true" for the production org (set by the org's production input)
 ################################################################################
 set -e
 
 # Destructive Apex deployments in production require tests
 test_flags=""
-if [ "$CI_ENVIRONMENT_NAME" == "production" ] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
+if [ "${IS_PRODUCTION:-false}" == "true" ] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DEPLOY_PACKAGE" 2>/dev/null; then
     test_flags="-l RunSpecifiedTests --tests ${DESTRUCTIVE_TESTS:?Set DESTRUCTIVE_TESTS to a space-separated list of test classes before destroying Apex in production.}"
 fi
 

@@ -1,0 +1,126 @@
+spec:
+  inputs:
+    name:
+      description: "Job name suffix (deploy:<name>, test:predeploy:<name>, ...) and hidden template prefix (.<name>-auth, .<name>-org)."
+    environment:
+      description: "GitLab environment and deploy lock name; MR validations use validate-<environment>."
+    alias:
+      description: "Salesforce CLI alias (matches sfdx-project.json replaceWhenEnv values) and prefix of the org's CI/CD variables: <alias>_JWT_CLIENT_ID, <alias>_JWT_KEY, <alias>_USERNAME, <alias>_INSTANCE_URL, <alias>_ORG_URL, <alias>_DISABLED."
+    branch:
+      description: "Rules expression for the org's branch, usually a variable reference such as $DEV_BRANCH or $CI_DEFAULT_BRANCH (quote literals: \"'staging'\")."
+    production:
+      type: boolean
+      default: false
+      description: "Production org: sets IS_PRODUCTION so deploys can use QUICK_DEPLOY and Apex deletions require tests."
+    release:
+      type: boolean
+      default: false
+      description: "Release branching model (BRANCHING_MODEL=release): validate MRs into release/* and deploy release/* pushes here."
+    release_manual:
+      type: boolean
+      default: false
+      description: "Release deploys are manual and wait for release_after (otherwise they run automatically)."
+    release_after:
+      default: "deploy:dev"
+      description: "Job a manual release deploy needs, so it can only be played once the same commit is deployed there."
+---
+####################################################
+# Org Jobs Template
+# All jobs for one Salesforce org (unit tests, MR validation, deploy, destroy),
+# included once per org from .gitlab-ci.yml with that org's inputs. Requires
+# GitLab 17.0+ (CI/CD inputs). See orgs/README.md.
+# Org branching model: pushes to the org's branch deploy here.
+# Release branching model (release input): MRs into release/* validate here,
+# and pushes to release/* deploy here, automatically or (release_manual) as a
+# manual job that needs release_after. Release deploys diff from the merge-base
+# with the default branch (DELTA_BASE_BRANCH), so each deploy carries the whole
+# release. The release branch's first (creation) push is skipped.
+####################################################
+
+####################################################
+# Org credentials, defined once and shared by every job below.
+# .<name>-auth: credentials only (also used by maintenance jobs).
+# .<name>-org:  credentials + deploy lock + environment URL for jobs that change the org.
+####################################################
+.$[[ inputs.name ]]-auth:
+  variables:
+    AUTH_ALIAS: $[[ inputs.alias ]]
+    AUTH_CLIENT_ID: $$[[ inputs.alias ]]_JWT_CLIENT_ID
+    AUTH_JWT_KEY_FILE: $$[[ inputs.alias ]]_JWT_KEY
+    AUTH_USERNAME: $$[[ inputs.alias ]]_USERNAME
+    AUTH_INSTANCE_URL: $$[[ inputs.alias ]]_INSTANCE_URL
+    IS_PRODUCTION: "$[[ inputs.production ]]"
+
+.$[[ inputs.name ]]-org:
+  extends: .$[[ inputs.name ]]-auth
+  resource_group: $[[ inputs.environment ]]
+  environment:
+    url: $$[[ inputs.alias ]]_ORG_URL
+
+test:unit:$[[ inputs.name ]]:
+  extends: [.test-unit, .$[[ inputs.name ]]-auth]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == $[[ inputs.branch ]]
+      when: always
+
+test:postrun:$[[ inputs.name ]]:
+  extends: [.test-postrun, .$[[ inputs.name ]]-auth]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == $[[ inputs.branch ]]
+      when: delayed
+      start_in: 90 minutes
+  needs: ["test:unit:$[[ inputs.name ]]"]
+
+test:predeploy:$[[ inputs.name ]]:
+  extends: [.validate-metadata, .$[[ inputs.name ]]-org]
+  stage: test
+  rules:
+    - !reference [.skip-org-branch-sources, rules]
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $[[ inputs.branch ]]
+      when: manual
+    - if: $[[ inputs.release ]] == true && $BRANCHING_MODEL == 'release' && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^release\//
+      when: manual
+  # Manual jobs default to allow_failure: true; keep validation failures blocking.
+  allow_failure: false
+  environment:
+    name: validate-$[[ inputs.environment ]]
+
+deploy:$[[ inputs.name ]]:
+  extends: [.deploy-metadata, .$[[ inputs.name ]]-org]
+  stage: deploy
+  rules:
+    - if: $$[[ inputs.alias ]]_DISABLED
+      when: never
+    # packageBackfill* jobs commit retrieved metadata with a chore(metadata-retrieval)
+    # message (default-branch pushes keep CI so prodBackfill still merges them into
+    # the sandbox branches); the metadata already came from the org, so don't deploy it back.
+    - if: '$CI_COMMIT_MESSAGE =~ /chore\(metadata-retrieval\):/i'
+      when: never
+    - if: $CI_COMMIT_REF_NAME == $[[ inputs.branch ]] && $CI_PIPELINE_SOURCE == 'push'
+      when: always
+    - if: $[[ inputs.release ]] == true && $[[ inputs.release_manual ]] == false && $BRANCHING_MODEL == 'release' && $CI_COMMIT_BRANCH =~ /^release\// && $CI_PIPELINE_SOURCE == 'push' && $CI_COMMIT_BEFORE_SHA != '0000000000000000000000000000000000000000'
+      when: always
+      variables:
+        DELTA_BASE_BRANCH: $CI_DEFAULT_BRANCH
+    - if: $[[ inputs.release ]] == true && $[[ inputs.release_manual ]] == true && $BRANCHING_MODEL == 'release' && $CI_COMMIT_BRANCH =~ /^release\// && $CI_PIPELINE_SOURCE == 'push' && $CI_COMMIT_BEFORE_SHA != '0000000000000000000000000000000000000000'
+      when: manual
+      needs:
+        - job: "$[[ inputs.release_after ]]"
+          optional: true
+      variables:
+        DELTA_BASE_BRANCH: $CI_DEFAULT_BRANCH
+  # Manual (release model) jobs default to allow_failure: true; keep failures blocking.
+  allow_failure: false
+  environment:
+    name: $[[ inputs.environment ]]
+
+destroy:$[[ inputs.name ]]:
+  extends: [.delete-metadata, .$[[ inputs.name ]]-org]
+  stage: destroy
+  rules:
+    - if: $$[[ inputs.alias ]]_DISABLED
+      when: never
+    - if: $CI_COMMIT_REF_NAME == $[[ inputs.branch ]] && $CI_PIPELINE_SOURCE == 'web' && $PACKAGE
+      when: always
+  environment:
+    name: $[[ inputs.environment ]]

@@ -15,7 +15,7 @@
 # Environment Variables Required:
 #   - testclasses: "--tests Class1 --tests Class2 ..." from apextestlist (sf format), or empty for non-Apex packages
 #   - CI_PIPELINE_SOURCE: Pipeline trigger type (push, merge_request, etc.)
-#   - CI_ENVIRONMENT_NAME: Target environment (production, sandbox, etc.)
+#   - IS_PRODUCTION: "true" for the production org (set by the org's production input)
 #   - DEPLOY_PACKAGE, DEPLOY_TIMEOUT
 # Optional:
 #   - destructive_flags: "--pre-destructive-changes <file>" or "--post-destructive-changes <file>",
@@ -40,7 +40,7 @@ else
             --coverage-formatters json --results-dir coverage \
             -x $DEPLOY_PACKAGE $destructive_flags -w $DEPLOY_TIMEOUT --verbose --ignore-warnings
     else
-        if [ "$CI_ENVIRONMENT_NAME" == "production" ] && [ "$QUICK_DEPLOY" == "true" ]; then
+        if [ "${IS_PRODUCTION:-false}" == "true" ] && [ "$QUICK_DEPLOY" == "true" ]; then
             # Production with QUICK_DEPLOY=true: validate then quick-deploy (faster Apex compilation).
             # The quick deploy reuses the validation, deletions included.
             sf project deploy validate -l RunSpecifiedTests $testclasses \

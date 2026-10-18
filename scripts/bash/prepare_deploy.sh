@@ -29,7 +29,8 @@
 #   - CI_COMMIT_BEFORE_SHA: on push pipelines without DELTA_BASE_BRANCH
 # Optional:
 #   - CI_MERGE_REQUEST_TARGET_BRANCH_NAME, DELTA_BASE_BRANCH
-#   - AUTO_DESTROY, DESTRUCTIVE_MODE, DESTRUCTIVE_TESTS, CI_ENVIRONMENT_NAME
+#   - AUTO_DESTROY, DESTRUCTIVE_MODE, DESTRUCTIVE_TESTS
+#   - IS_PRODUCTION: "true" for the production org (set by the org's production input)
 # Requires: sfdx-git-delta >= 7.3.0 (--merge-base), apextestlist >= 1.15.0
 #           (--fail-on-empty fails the job when the manifest has Apex but no
 #           resolvable tests)
@@ -66,8 +67,8 @@ if [ "$AUTO_DESTROY" == "true" ] && grep -q '<types>' "$DESTRUCTIVE_CHANGES" 2>/
     echo "=== Destructive Changes (${mode}-destructive) ==="
     sf sfpl list -x "$DESTRUCTIVE_CHANGES" || true
     echo "=========================="
-    # *production also matches validate-production
-    if [ -z "$testclasses" ] && [[ "$CI_ENVIRONMENT_NAME" == *production ]] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DESTRUCTIVE_CHANGES"; then
+    # Applies to production validations and deploys alike
+    if [ -z "$testclasses" ] && [ "${IS_PRODUCTION:-false}" == "true" ] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DESTRUCTIVE_CHANGES"; then
         testclasses="--tests ${DESTRUCTIVE_TESTS:?Set DESTRUCTIVE_TESTS to a space-separated list of test classes before destroying Apex in production.}"
     fi
 fi

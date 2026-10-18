@@ -1,82 +1,88 @@
 # Org-Specific CI/CD Configuration
 
-This directory contains individual YAML files for each Salesforce org that participates in the CI/CD pipeline. Each org has its own dedicated file containing all deployment jobs (validate, unit test, deploy, destroy) for that environment.
+Every Salesforce org in the pipeline uses the same job template, [`org.yml`](org.yml). `.gitlab-ci.yml` includes it once per org with that org's [CI/CD inputs](https://docs.gitlab.com/ci/inputs/), so adding an org is one `include` entry, not a copied file. Requires **GitLab 17.0+**.
+
+Each include defines that org's jobs:
+
+- `test:unit:<name>` / `test:postrun:<name>` - scheduled unit tests (`$JOB_NAME == unitTest` on the org's branch)
+- `test:predeploy:<name>` - manual MR validation against the org
+- `deploy:<name>` - deploy on push to the org's branch
+- `destroy:<name>` - web pipeline destroy with `$PACKAGE`
+- `.<name>-auth` / `.<name>-org` - hidden templates with the org's credentials (plus the deploy lock and environment URL), reusable by other jobs (the maintenance jobs extend `.prd-auth`, `.dev-auth` and `.fullqa-auth`)
+
+Git-tracked deletions need no job of their own: `deploy:<name>` and `test:predeploy:<name>` include them (see `AUTO_DESTROY` in `.gitlab-ci.yml`).
 
 ## Current Orgs
 
-- **`dev.yml`** - Development sandbox
-- **`fullqa.yml`** - Full QA sandbox
-- **`production.yml`** - Production
+```yaml
+include:
+  - local: ".gitlab/workflows/orgs/org.yml"
+    inputs:
+      name: dev
+      environment: dev
+      alias: DEV
+      branch: "$DEV_BRANCH"
+      release: true
+  - local: ".gitlab/workflows/orgs/org.yml"
+    inputs:
+      name: fullqa
+      environment: fullqa
+      alias: FULLQA
+      branch: "$FULLQA_BRANCH"
+      release: true
+      release_manual: true
+      release_after: "deploy:dev"
+  - local: ".gitlab/workflows/orgs/org.yml"
+    inputs:
+      name: prd
+      environment: production
+      alias: PRODUCTION
+      branch: "$CI_DEFAULT_BRANCH"
+      production: true
+```
+
+## Inputs
+
+| Input            | Required | Example            | Purpose                                                                                                                                                                          |
+| ---------------- | -------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`           | yes      | `staging`          | Job name suffix (`deploy:staging`, ...) and hidden template prefix (`.staging-auth`, `.staging-org`)                                                                             |
+| `environment`    | yes      | `staging`          | GitLab environment and deploy lock (`resource_group`) name; MR validations use `validate-<environment>`                                                                           |
+| `alias`          | yes      | `STAGING`          | Salesforce CLI alias (match it in `sfdx-project.json` `replaceWhenEnv` values) and prefix of the org's CI/CD variables (see [below](#cicd-variables))                             |
+| `branch`         | yes      | `"$STAGING_BRANCH"` | Rules expression for the org's branch: a variable reference (define it under `variables:` in `.gitlab-ci.yml`) or a quoted literal such as `"'staging'"`                         |
+| `production`     | no       | `true`             | Marks the production org: sets `IS_PRODUCTION`, so `QUICK_DEPLOY` applies and Apex deletions require tests (`DESTRUCTIVE_TESTS`). Default `false`                                |
+| `release`        | no       | `true`             | Release branching model (`BRANCHING_MODEL: "release"`): validate MRs into `release/*` and deploy `release/*` pushes to this org. Default `false`                                  |
+| `release_manual` | no       | `true`             | Release deploys are manual jobs that need `release_after`, instead of running automatically. Default `false`                                                                      |
+| `release_after`  | no       | `"deploy:dev"`     | Job a manual release deploy needs, so it can only be played once the same commit is deployed there. Default `deploy:dev`                                                         |
 
 ## Adding a New Org
 
-### Step 1: Create the Org YAML File
+1. **Add an include** to `.gitlab-ci.yml` with the new org's inputs:
 
-Copy an existing org file as your template:
+   ```yaml
+   - local: ".gitlab/workflows/orgs/org.yml"
+     inputs:
+       name: staging
+       environment: staging
+       alias: STAGING
+       branch: "$STAGING_BRANCH"
+   ```
 
-```bash
-cp .gitlab/workflows/orgs/dev.yml .gitlab/workflows/orgs/staging.yml
-```
+   and define the branch variable under `variables:` (`STAGING_BRANCH: "staging"`).
 
-### Step 2: Update Job Names and Variables
+2. **Set the org's CI/CD variables** (see [below](#cicd-variables)).
 
-Edit the new file. Replace all `dev` / `DEV` references and the `$DEV_BRANCH` branch with your org's values. Credentials, the deploy lock (`resource_group`) and the environment URL are defined once at the top of the file in two hidden templates, `.[ORG]-auth` and `.[ORG]-org`, which every job extends.
+3. **Wire it into the shared jobs** where needed:
+   - Add `test:predeploy:<name>` (with `optional: true`) to the `needs` list of the `quality` job in `test-quality-jobs.yml`, so SonarQube (when `SONAR_URL` is set) receives that org's validation coverage.
+   - If the new org's branch should be treated like the other long-lived org branches (MRs *from* it skip validation and scans), add it to `.skip-org-branch-sources` in `base-templates.yml` and to the target-branch lists in `test-quality-jobs.yml`.
+   - If the new org should be checked by `pre-merge-check`, set `DEV_DEPLOY_JOB`/`FULLQA_DEPLOY_JOB` (and the `*_PREDEPLOY_JOB` variables) accordingly.
 
-#### Job names to define:
+### Release branching model
 
-- `test:unit:[ORG]` / `test:postrun:[ORG]`
-- `test:predeploy:[ORG]`
-- `deploy:[ORG]`
-- `destroy:[ORG]` (web pipeline)
+With `BRANCHING_MODEL: "release"`, orgs with `release: true` validate MRs into `release/*` and receive `release/*` deploys. Set `release_manual: true` and `release_after` to the deploy job of the org that should be deployed first (for example a UAT org after `deploy:fullqa`). Release deploys diff from the merge-base with the default branch (`DELTA_BASE_BRANCH`), so playing the latest pipeline deploys the whole release even if earlier pipelines were never played.
 
-Git-tracked deletions need no job of their own: `deploy:[ORG]` and `test:predeploy:[ORG]` include them (see `AUTO_DESTROY` in `.gitlab-ci.yml`).
+## CI/CD Variables
 
-Also add `test:predeploy:[ORG]` (with `optional: true`) to the `needs` list of the `quality` job in `test-quality-jobs.yml`, so SonarQube (when `SONAR_URL` is set) receives that org's validation coverage.
-
-#### Values to update:
-
-| Field                                  | What to set                                                 |
-| -------------------------------------- | ----------------------------------------------------------- |
-| `.[ORG]-org` → `resource_group`        | unique name per org (e.g. `staging`)                        |
-| `.[ORG]-auth` → `AUTH_ALIAS`           | Salesforce CLI alias (e.g. `STAGING`)                       |
-| `.[ORG]-auth` → `AUTH_CLIENT_ID`       | CI variable holding the org's JWT client ID                 |
-| `.[ORG]-auth` → `AUTH_JWT_KEY_FILE`    | Path from a GitLab File variable containing the private key |
-| `.[ORG]-auth` → `AUTH_USERNAME`        | Salesforce username to authorize                            |
-| `.[ORG]-auth` → `AUTH_INSTANCE_URL`    | Salesforce My Domain login URL                              |
-| `.[ORG]-org` → `environment.url`       | CI variable for the org URL (e.g. `$STAGING_ORG_URL`)       |
-| `environment.name` (per job)           | e.g. `validate-staging`, `staging`                          |
-| Branch name in rules                   | e.g. `'staging'`, or a new global variable like `$STAGING_BRANCH` |
-| Disabled guard variable                | e.g. `$STAGING_DISABLED`                                    |
-
-If the new org's branch should be treated like the other long-lived org branches (MRs *from* it skip validation and scans), add it to `.skip-org-branch-sources` in `base-templates.yml` and to the target-branch lists in `test-quality-jobs.yml`.
-
-#### Release branching model
-
-The template below covers the org branching model. If you set `BRANCHING_MODEL: "release"` and want the new sandbox to receive `release/*` deploys, copy the `$BRANCHING_MODEL == 'release'` rules from `dev.yml` (automatic deploy) or `fullqa.yml` (manual deploy that `needs` the previous org's deploy) into the new org's `test:predeploy` and `deploy` jobs, and point `needs` at the org that should be deployed first. Keep `DELTA_BASE_BRANCH: $CI_DEFAULT_BRANCH` in the deploy rules. If the new org should be checked by `pre-merge-check`, also set `DEV_DEPLOY_JOB`/`FULLQA_DEPLOY_JOB` accordingly.
-
-### Step 3: Include the New Org File
-
-Add your new org file to `.gitlab-ci.yml`:
-
-```yaml
-include:
-  - local: ".gitlab/workflows/base-templates.yml"
-  - local: ".gitlab/workflows/build.yml"
-  - local: ".gitlab/workflows/test-quality-jobs.yml"
-  - local: ".gitlab/workflows/maintenance-pipeline.yml"
-  - local: ".gitlab/workflows/orgs/dev.yml"
-  - local: ".gitlab/workflows/orgs/fullqa.yml"
-  - local: ".gitlab/workflows/orgs/production.yml"
-  - local: ".gitlab/workflows/orgs/staging.yml" # ← add here
-```
-
-### Step 4: Configure GitLab CI/CD Variables
-
-Create an external client app (or connected app where required) and upload the public certificate, following Salesforce's [JWT flow setup guide](https://developer.salesforce.com/docs/platform/sfdx-dev/guide/sfdx-dev-auth-jwt-flow.html). In your GitLab project settings, add:
-
-For `PRODUCTION_JWT_CLIENT_ID`, use a **Connected App** if you run the `sandboxRefresh` job: Salesforce requires it when the CLI creates or refreshes sandboxes.
-
-For JWT credentials belonging to a sandbox that will be refreshed, follow the manual [before-refresh backup](https://sfdx-hardis.cloudity.com/hardis/org/refresh/before-refresh/) and [after-refresh restore](https://sfdx-hardis.cloudity.com/hardis/org/refresh/after-refresh/) procedures. Back up the External Client App credentials before refreshing, then verify the restored consumer key matches that sandbox's `*_JWT_CLIENT_ID` and its certificate matches `*_JWT_KEY`. The before-refresh procedure can optionally delete backed-up apps to support a clean restore; this is not mandatory for every setup. These procedures are interactive and must not be added to CI. Connected Apps generally can't be restored after a Spring '26 refresh without Salesforce Support, so convert any sandbox app that must survive refresh to an External Client App first.
+Create an external client app (or connected app where required) and upload the public certificate, following Salesforce's [JWT flow setup guide](https://developer.salesforce.com/docs/platform/sfdx-dev/guide/sfdx-dev-auth-jwt-flow.html). In your GitLab project settings, add these variables, named after the org's `alias` input (`STAGING` here):
 
 - **`STAGING_JWT_CLIENT_ID`** - OAuth consumer key for the app
 - **`STAGING_JWT_KEY`** - private key; set the variable type to **File** so CI passes a temporary file path to Salesforce CLI
@@ -85,113 +91,35 @@ For JWT credentials belonging to a sandbox that will be refreshed, follow the ma
 - **`STAGING_ORG_URL`** - display URL for the GitLab environment (cosmetic)
 - **`STAGING_DISABLED`** - optional; set to any value to disable deploys to staging
 
+For `PRODUCTION_JWT_CLIENT_ID`, use a **Connected App** if you run the `sandboxRefresh` job: Salesforce requires it when the CLI creates or refreshes sandboxes.
+
+For JWT credentials belonging to a sandbox that will be refreshed, follow the manual [before-refresh backup](https://sfdx-hardis.cloudity.com/hardis/org/refresh/before-refresh/) and [after-refresh restore](https://sfdx-hardis.cloudity.com/hardis/org/refresh/after-refresh/) procedures. Back up the External Client App credentials before refreshing, then verify the restored consumer key matches that sandbox's `*_JWT_CLIENT_ID` and its certificate matches `*_JWT_KEY`. The before-refresh procedure can optionally delete backed-up apps to support a clean restore; this is not mandatory for every setup. These procedures are interactive and must not be added to CI. Connected Apps generally can't be restored after a Spring '26 refresh without Salesforce Support, so convert any sandbox app that must survive refresh to an External Client App first.
+
 Keep the private key out of the repository. Protect and scope the key variable to trusted pipelines where possible; merge-request validation jobs also need access to the credentials for the target org.
 
----
+## Customizing
 
-## Org File Template
+Changes to `org.yml` apply to every org. For a one-off change to a single org, override that job after the includes, in `.gitlab-ci.yml` or a separate included file (later definitions are merged over the template's, and keys such as `rules` are replaced whole):
 
 ```yaml
-####################################################
-# [ORG_NAME] Org Jobs
-####################################################
-
-.[ORG_NAME]-auth:
-  variables:
-    AUTH_ALIAS: [AUTH_ALIAS]
-    AUTH_CLIENT_ID: $[JWT_CLIENT_ID_VAR]
-    AUTH_JWT_KEY_FILE: $[JWT_KEY_VAR]
-    AUTH_USERNAME: $[USERNAME_VAR]
-    AUTH_INSTANCE_URL: $[INSTANCE_URL_VAR]
-
-.[ORG_NAME]-org:
-  extends: .[ORG_NAME]-auth
-  resource_group: [ORG_NAME]
-  environment:
-    url: $[ORG_URL_VAR]
-
-test:unit:[ORG_NAME]:
-  extends: [.test-unit, .[ORG_NAME]-auth]
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == '[BRANCH_NAME]'
-      when: always
-
-test:postrun:[ORG_NAME]:
-  extends: [.test-postrun, .[ORG_NAME]-auth]
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'unitTest' && $CI_COMMIT_REF_NAME == '[BRANCH_NAME]'
-      when: delayed
-      start_in: 90 minutes
-  needs: ["test:unit:[ORG_NAME]"]
-
-test:predeploy:[ORG_NAME]:
-  extends: [.validate-metadata, .[ORG_NAME]-org]
-  stage: test
-  rules:
-    - !reference [.skip-org-branch-sources, rules]
-    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == '[BRANCH_NAME]'
-      when: manual
-  # Manual jobs default to allow_failure: true; keep validation failures blocking.
-  allow_failure: false
-  environment:
-    name: validate-[ORG_NAME]
-
-deploy:[ORG_NAME]:
-  extends: [.deploy-metadata, .[ORG_NAME]-org]
-  stage: deploy
-  rules:
-    - if: $[DISABLED_VAR]
-      when: never
-    - if: $CI_COMMIT_REF_NAME == '[BRANCH_NAME]' && $CI_PIPELINE_SOURCE == 'push'
-      when: always
-  environment:
-    name: [ORG_NAME]
-
-destroy:[ORG_NAME]:
-  extends: [.delete-metadata, .[ORG_NAME]-org]
-  stage: destroy
-  rules:
-    - if: $[DISABLED_VAR]
-      when: never
-    - if: $CI_COMMIT_REF_NAME == '[BRANCH_NAME]' && $CI_PIPELINE_SOURCE == 'web' && $PACKAGE
-      when: always
-  environment:
-    name: [ORG_NAME]
+deploy:staging:
+  when: manual
 ```
-
-### Template Placeholders
-
-| Placeholder           | Example                 |
-| --------------------- | ----------------------- |
-| `[ORG_NAME]`          | `staging`               |
-| `[BRANCH_NAME]`       | `staging`               |
-| `[AUTH_ALIAS]`        | `STAGING`               |
-| `[JWT_CLIENT_ID_VAR]` | `STAGING_JWT_CLIENT_ID` |
-| `[JWT_KEY_VAR]`       | `STAGING_JWT_KEY`       |
-| `[USERNAME_VAR]`      | `STAGING_USERNAME`      |
-| `[INSTANCE_URL_VAR]`  | `STAGING_INSTANCE_URL`  |
-| `[ORG_URL_VAR]`       | `STAGING_ORG_URL`       |
-| `[DISABLED_VAR]`      | `STAGING_DISABLED`      |
-
----
-
-## Updating an Existing Org
-
-Edit the org's YAML file directly. Changes are isolated — no other files need touching.
 
 ## Removing an Org
 
-1. Delete the file: `rm .gitlab/workflows/orgs/staging.yml`
-2. Remove its `include:` line from `.gitlab-ci.yml`
+1. Remove its `include` entry from `.gitlab-ci.yml`
+2. Remove references to its jobs or `.<name>-auth` template (the `quality` job's `needs`, maintenance jobs)
 3. Clean up the org's CI/CD variables (optional)
 
 ## Troubleshooting
 
 | Symptom                       | Check                                                                                                   |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Jobs not appearing            | `include:` line added to `.gitlab-ci.yml`?                                                              |
-| Auth failures                 | JWT client ID, File-type private key, username, and My Domain URL variables are set?                    |
-| Wrong jobs triggering         | Branch names in rules match your git branches?                                                          |
-| Resource group conflicts      | Resource group names unique per org?                                                                    |
+| `unknown keyword` / `spec` errors | GitLab 17.0+? Older versions don't support `include` inputs                                         |
+| Jobs not appearing            | `include` entry added to `.gitlab-ci.yml`? Branch variable defined and matching your git branch?       |
+| Auth failures                 | `<ALIAS>_JWT_CLIENT_ID`, File-type `<ALIAS>_JWT_KEY`, `<ALIAS>_USERNAME` and `<ALIAS>_INSTANCE_URL` set? |
+| Resource group conflicts      | `environment` input unique per org?                                                                     |
+| No quick deploy / destructive tests in production | `production: true` set on the production org's include?                            |
 | Deleted files not deleted     | `AUTO_DESTROY` is `"true"`? The job log prints a "Destructive Changes" list when deletions are included |
 | Delete fails on a dependency  | Needs the other order — add `[pre-destructive]` to the commit message / MR title, or use a web destroy  |

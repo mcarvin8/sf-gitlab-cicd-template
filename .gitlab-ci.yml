@@ -25,10 +25,31 @@ include:
   - local: ".gitlab/workflows/build.yml"
   - local: ".gitlab/workflows/test-quality-jobs.yml"
   - local: ".gitlab/workflows/maintenance-pipeline.yml"
-  # Org-specific job definitions — add, rename, or remove files under orgs/
-  - local: ".gitlab/workflows/orgs/dev.yml"
-  - local: ".gitlab/workflows/orgs/fullqa.yml"
-  - local: ".gitlab/workflows/orgs/production.yml"
+  # Org jobs: one include of orgs/org.yml per org (GitLab 17.0+). Add, rename or
+  # remove an org here; see .gitlab/workflows/orgs/README.md for the inputs.
+  - local: ".gitlab/workflows/orgs/org.yml"
+    inputs:
+      name: dev
+      environment: dev
+      alias: DEV
+      branch: "$DEV_BRANCH"
+      release: true
+  - local: ".gitlab/workflows/orgs/org.yml"
+    inputs:
+      name: fullqa
+      environment: fullqa
+      alias: FULLQA
+      branch: "$FULLQA_BRANCH"
+      release: true
+      release_manual: true
+      release_after: "deploy:dev"
+  - local: ".gitlab/workflows/orgs/org.yml"
+    inputs:
+      name: prd
+      environment: production
+      alias: PRODUCTION
+      branch: "$CI_DEFAULT_BRANCH"
+      production: true
 
 ####################################################
 # Pipeline stages (sequential order; jobs within a stage run in parallel).
