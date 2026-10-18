@@ -47,8 +47,9 @@ include:
 | ---------------- | -------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`           | yes      | `staging`          | Job name suffix (`deploy:staging`, ...) and hidden template prefix (`.staging-auth`, `.staging-org`)                                                                             |
 | `environment`    | yes      | `staging`          | GitLab environment and deploy lock (`resource_group`) name; MR validations use `validate-<environment>`                                                                           |
-| `alias`          | yes      | `STAGING`          | Salesforce CLI alias (match it in `sfdx-project.json` `replaceWhenEnv` values) and prefix of the org's CI/CD variables (see [below](#cicd-variables))                             |
+| `alias`          | yes      | `STAGING`          | Salesforce CLI alias (match it in `sfdx-project.json` `replaceWhenEnv` values) and prefix of the org's CI/CD variables (see [Authentication](#authentication))                             |
 | `branch`         | yes      | `"$STAGING_BRANCH"` | Rules expression for the org's branch: a variable reference (define it under `variables:` in `.gitlab-ci.yml`) or a quoted literal such as `"'staging'"`                         |
+| `auth_method`    | no       | `sfdx-url`         | How CI authorizes the org: `jwt`, `sfdx-url` or `access-token` (see [Authentication](#authentication)). Default `jwt`                                                              |
 | `production`     | no       | `true`             | Marks the production org: sets `IS_PRODUCTION`, so `QUICK_DEPLOY` applies and Apex deletions require tests (`DESTRUCTIVE_TESTS`). Default `false`                                |
 | `release`        | no       | `true`             | Release branching model (`BRANCHING_MODEL: "release"`): validate MRs into `release/*` and deploy `release/*` pushes to this org. Default `false`                                  |
 | `release_manual` | no       | `true`             | Release deploys are manual jobs that need `release_after`, instead of running automatically. Default `false`                                                                      |
@@ -69,7 +70,7 @@ include:
 
    and define the branch variable under `variables:` (`STAGING_BRANCH: "staging"`).
 
-2. **Set the org's CI/CD variables** (see [below](#cicd-variables)).
+2. **Set the org's CI/CD variables** for its `auth_method` (see [Authentication](#authentication)); add `auth_method: sfdx-url` or `auth_method: access-token` to the include when not using JWT.
 
 3. **Wire it into the shared jobs** where needed:
    - Add `test:predeploy:<name>` (with `optional: true`) to the `needs` list of the `quality` job in `test-quality-jobs.yml`, so SonarQube (when `SONAR_URL` is set) receives that org's validation coverage.
@@ -80,14 +81,36 @@ include:
 
 With `BRANCHING_MODEL: "release"`, orgs with `release: true` validate MRs into `release/*` and receive `release/*` deploys. Set `release_manual: true` and `release_after` to the deploy job of the org that should be deployed first (for example a UAT org after `deploy:fullqa`). Release deploys diff from the merge-base with the default branch (`DELTA_BASE_BRANCH`), so playing the latest pipeline deploys the whole release even if earlier pipelines were never played.
 
-## CI/CD Variables
+## Authentication
 
-Create an external client app (or connected app where required) and upload the public certificate, following Salesforce's [JWT flow setup guide](https://developer.salesforce.com/docs/platform/sfdx-dev/guide/sfdx-dev-auth-jwt-flow.html). In your GitLab project settings, add these variables, named after the org's `alias` input (`STAGING` here):
+Each org's `auth_method` input picks how CI authorizes it (`scripts/bash/authenticate.sh`). CI/CD variables are named after the org's `alias` input (`STAGING` here); only the chosen method's variables need values.
+
+| `auth_method`   | Variables                                                                     | Use when                                                                                         |
+| --------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `jwt` (default) | `STAGING_JWT_CLIENT_ID`, `STAGING_JWT_KEY`, `STAGING_USERNAME`, `STAGING_INSTANCE_URL` | You can create an external client app (or connected app) with a certificate - the recommended, non-expiring CI setup |
+| `sfdx-url`      | `STAGING_AUTH_URL`                                                            | No app of your own: authorize once locally (`sf org login web`), then copy the `Sfdx Auth Url` from `sf org display --target-org <alias> --verbose` |
+| `access-token`  | `STAGING_ACCESS_TOKEN`, `STAGING_INSTANCE_URL`                                | A secret manager or upstream job issues short-lived access tokens; the token expires with the session |
+
+### JWT
+
+Create an external client app (or connected app where required) and upload the public certificate, following Salesforce's [JWT flow setup guide](https://developer.salesforce.com/docs/platform/sfdx-dev/guide/sfdx-dev-auth-jwt-flow.html). In your GitLab project settings, add:
 
 - **`STAGING_JWT_CLIENT_ID`** - OAuth consumer key for the app
 - **`STAGING_JWT_KEY`** - private key; set the variable type to **File** so CI passes a temporary file path to Salesforce CLI
 - **`STAGING_USERNAME`** - Salesforce username to authorize
 - **`STAGING_INSTANCE_URL`** - org login URL, preferably the My Domain URL ending in `my.salesforce.com`
+
+### SFDX auth URL
+
+- **`STAGING_AUTH_URL`** - the `force://<clientId>:<clientSecret>:<refreshToken>@<instanceUrl>` URL. A **File** variable is preferred (its path is passed to `sf org login sfdx-url --sfdx-url-file`); a masked variable holding the URL also works. It carries a refresh token for the user who authorized it, so use a dedicated integration user and revoke the token if it leaks.
+
+### Access token
+
+- **`STAGING_ACCESS_TOKEN`** - a valid access token (masked); `SF_ACCESS_TOKEN` is set from it for `sf org login access-token`
+- **`STAGING_INSTANCE_URL`** - the org's My Domain URL
+
+### All methods
+
 - **`STAGING_ORG_URL`** - display URL for the GitLab environment (cosmetic)
 - **`STAGING_DISABLED`** - optional; set to any value to disable deploys to staging
 
@@ -118,7 +141,7 @@ deploy:staging:
 | ----------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `unknown keyword` / `spec` errors | GitLab 17.0+? Older versions don't support `include` inputs                                         |
 | Jobs not appearing            | `include` entry added to `.gitlab-ci.yml`? Branch variable defined and matching your git branch?       |
-| Auth failures                 | `<ALIAS>_JWT_CLIENT_ID`, File-type `<ALIAS>_JWT_KEY`, `<ALIAS>_USERNAME` and `<ALIAS>_INSTANCE_URL` set? |
+| Auth failures                 | The job log names any missing variable for the org's `auth_method`; for `jwt`, is `<ALIAS>_JWT_KEY` a File variable? |
 | Resource group conflicts      | `environment` input unique per org?                                                                     |
 | No quick deploy / destructive tests in production | `production: true` set on the production org's include?                            |
 | Deleted files not deleted     | `AUTO_DESTROY` is `"true"`? The job log prints a "Destructive Changes" list when deletions are included |

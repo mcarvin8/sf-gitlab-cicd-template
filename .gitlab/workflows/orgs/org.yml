@@ -5,7 +5,11 @@ spec:
     environment:
       description: "GitLab environment and deploy lock name; MR validations use validate-<environment>."
     alias:
-      description: "Salesforce CLI alias (matches sfdx-project.json replaceWhenEnv values) and prefix of the org's CI/CD variables: <alias>_JWT_CLIENT_ID, <alias>_JWT_KEY, <alias>_USERNAME, <alias>_INSTANCE_URL, <alias>_ORG_URL, <alias>_DISABLED."
+      description: "Salesforce CLI alias (matches sfdx-project.json replaceWhenEnv values) and prefix of the org's CI/CD variables: <alias>_JWT_CLIENT_ID, <alias>_JWT_KEY, <alias>_USERNAME, <alias>_INSTANCE_URL, <alias>_AUTH_URL, <alias>_ACCESS_TOKEN, <alias>_ORG_URL, <alias>_DISABLED."
+    auth_method:
+      default: jwt
+      options: [jwt, sfdx-url, access-token]
+      description: "How CI authorizes the org: jwt (<alias>_JWT_CLIENT_ID, <alias>_JWT_KEY, <alias>_USERNAME, <alias>_INSTANCE_URL), sfdx-url (<alias>_AUTH_URL) or access-token (<alias>_ACCESS_TOKEN, <alias>_INSTANCE_URL)."
     branch:
       description: "Rules expression for the org's branch, usually a variable reference such as $DEV_BRANCH or $CI_DEFAULT_BRANCH (quote literals: \"'staging'\")."
     production:
@@ -45,10 +49,14 @@ spec:
 .$[[ inputs.name ]]-auth:
   variables:
     AUTH_ALIAS: $[[ inputs.alias ]]
+    # Read by scripts/bash/authenticate.sh; only the auth_method's variables need values
+    AUTH_METHOD: $[[ inputs.auth_method ]]
     AUTH_CLIENT_ID: $$[[ inputs.alias ]]_JWT_CLIENT_ID
     AUTH_JWT_KEY_FILE: $$[[ inputs.alias ]]_JWT_KEY
     AUTH_USERNAME: $$[[ inputs.alias ]]_USERNAME
     AUTH_INSTANCE_URL: $$[[ inputs.alias ]]_INSTANCE_URL
+    AUTH_SFDX_URL: $$[[ inputs.alias ]]_AUTH_URL
+    AUTH_ACCESS_TOKEN: $$[[ inputs.alias ]]_ACCESS_TOKEN
     IS_PRODUCTION: "$[[ inputs.production ]]"
 
 .$[[ inputs.name ]]-org:
