@@ -7,8 +7,9 @@
 #              from that org, so there is nothing to deploy); default-branch pushes
 #              run CI so prodBackfill merges them into the sandbox branches
 #              (deploy:prd skips chore(metadata-retrieval) commits).
-#              Optionally pre-purges force-app folders for specific metadata
+#              Optionally pre-purges package directory folders for specific metadata
 #              types to ensure clean retrieval and remove destroyed metadata files.
+#              Package directories come from sfdx-project.json (package_dirs.sh).
 # Usage: Called from CI/CD pipeline (one job per branch for parallel runs).
 # Environment Variables Required:
 #   - ORG_BRANCH: Git branch to commit retrieved metadata to
@@ -57,7 +58,7 @@ find_metadata_registry() {
     fi
 }
 
-# Function to map metadata types to force-app folder names using metadataRegistry.json
+# Function to map metadata types to source folder names using metadataRegistry.json
 get_folder_for_metadata_type() {
     local metadata_type=$1
 
@@ -83,6 +84,16 @@ get_folder_for_metadata_type() {
 
 git checkout -q "$branch_name"
 git pull --ff -q
+
+# Package directories from this branch's sfdx-project.json
+source ./scripts/bash/package_dirs.sh
+package_dirs=()
+while IFS= read -r dir; do
+    if [[ -n "$dir" ]]; then
+        package_dirs+=("$dir")
+    fi
+done < <(sf_package_dirs)
+
 mkdir -p manifest
 if [[ "$PACKAGE_NAME" == "Objects.xml" ]]; then
     echo "Objects.xml: generating manifest/package.xml (CustomObject only) from '${branch_name}'..."
@@ -100,20 +111,22 @@ else
 fi
 
 if [[ "$PREPURGE" == "true" ]]; then
-    echo "Pre-purging force-app folders for metadata types in $PACKAGE_NAME..."
+    echo "Pre-purging package directory folders for metadata types in $PACKAGE_NAME..."
 
-    metadata_types=$(grep -oP '(?<=<name>)[^<]+(?=</name>)' "scripts/packages/$PACKAGE_NAME" || true)
+    metadata_types=$(grep -oE '<name>[^<]+</name>' "scripts/packages/$PACKAGE_NAME" | sed -E 's#</?name>##g' || true)
     registry_file=$(find_metadata_registry)
 
     while IFS= read -r metadata_type; do
         if [ -n "$metadata_type" ]; then
             folder=$(get_folder_for_metadata_type "$metadata_type")
             if [ -n "$folder" ]; then
-                folder_path="force-app/main/default/$folder"
-                if [ -d "$folder_path" ]; then
-                    echo "  Removing $folder_path..."
-                    rm -rf "$folder_path"
-                fi
+                for package_dir in "${package_dirs[@]}"; do
+                    folder_path=$(sf_metadata_type_dir "$package_dir" "$folder")
+                    if [ -n "$folder_path" ]; then
+                        echo "  Removing $folder_path..."
+                        rm -rf "$folder_path"
+                    fi
+                done
             fi
         fi
     done <<< "$metadata_types"
@@ -127,10 +140,10 @@ if [[ "$PACKAGE_NAME" == "Objects.xml" ]]; then
 else
     sf project retrieve start --manifest manifest/package.xml --target-org "$target_org" --ignore-conflicts --wait "$DEPLOY_TIMEOUT"
 fi
-git add --renormalize force-app/ 2>/dev/null || true
-if [[ -n $(git status --porcelain force-app/) ]]; then
-    echo "Changes found in the force-app directory..."
-    git add force-app
+git add --renormalize "${package_dirs[@]}" 2>/dev/null || true
+if [[ -n $(git status --porcelain -- "${package_dirs[@]}") ]]; then
+    echo "Changes found in the package directories (${package_dirs[*]})..."
+    git add -- "${package_dirs[@]}"
     git commit -m "chore(metadata-retrieval): $PACKAGE_NAME @ $branch_name"
 
     # Job-only manifest changes must not block rebase; drop them (pipeline Git supports git restore).
@@ -151,5 +164,5 @@ if [[ -n $(git status --porcelain force-app/) ]]; then
         attempt=$((attempt + 1))
     done
 else
-    echo "There are no changes in the force-app directory on $branch_name."
+    echo "There are no changes in the package directories on $branch_name."
 fi

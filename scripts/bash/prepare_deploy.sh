@@ -46,8 +46,10 @@ echo "=== Deployment Package ==="
 sf sfpl list -x "$DEPLOY_PACKAGE" || true
 echo "=========================="
 
-# Strip ConnectedApp secrets (prints each file it touches)
-find . -path '*/connectedApps/*.connectedApp-meta.xml' -type f -print -exec sed -i '/<consumerKey>/d' {} +
+# Strip ConnectedApp secrets (prints each file it touches). `sed -i.bak` works
+# with GNU, BSD and BusyBox sed; the backups are removed right after.
+find . -path '*/connectedApps/*.connectedApp-meta.xml' -type f -print -exec sed -i.bak '/<consumerKey>/d' {} +
+find . -path '*/connectedApps/*.connectedApp-meta.xml.bak' -type f -delete
 
 # Empty for non-Apex packages
 testclasses=$(sf apextests list --format sf -x "$DEPLOY_PACKAGE" --no-warnings --fail-on-empty)

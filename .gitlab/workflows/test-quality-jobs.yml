@@ -25,7 +25,8 @@
   stage: test
   artifacts:
     paths:
-      - coverage-sonar.xml
+      # One coverage-<format>.<ext> file per COVERAGE_FORMATS entry
+      - coverage-*
       - coverage/*
     expire_in: 2 weeks
   before_script:
@@ -43,20 +44,22 @@
 # Java, Python and the code-analyzer/sf-cat plugins are baked into the default
 # pipeline image (see Dockerfile). salesforce/cli:latest-full ships Java and
 # Python; with SF_INSTALL_PLUGINS "true" .install-sf-plugins adds the plugins.
+# Scans every package directory in sfdx-project.json, and sf-cat converts the
+# results to each CODE_ANALYZER_FORMATS entry (codeclimate feeds the GitLab
+# Code Quality MR widget, sonar feeds the quality job).
 ####################################################
 code-analyzer-check:
   stage: quality
   allow_failure: true
   variables:
     CODE_ANALYZER_REPORT: "code-analyzer-report.json"
-    SONAR_ISSUES_REPORT: "sonar-issues.json"
   rules:
     - !reference [.skip-org-branch-sources, rules]
     - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $FULLQA_BRANCH || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $DEV_BRANCH || ($BRANCHING_MODEL == 'release' && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^release\//)
       changes:
-        - "force-app/main/default/classes/*.cls"
-        - "force-app/main/default/triggers/*.trigger"
-        - "force-app/main/default/flows/*.flow-meta.xml"
+        - "**/*.cls"
+        - "**/*.trigger"
+        - "**/*.flow-meta.xml"
       when: always
     - if: $CI_PIPELINE_SOURCE == 'schedule' && $JOB_NAME == 'fullQualityCodeScan'
       when: always
@@ -67,29 +70,48 @@ code-analyzer-check:
     # Code Analyzer tags every rule declared in a custom ruleset with the
     # ruleset's own `name` attribute (spaces stripped) -- default_apex.xml's
     # <ruleset name="Enforced Apex Rules"> becomes the "EnforcedApexRules" tag.
-    # sf code-analyzer errors hard if a --target path doesn't exist (unlike the
-    # old pmd binary), so classes/triggers/flows must always exist -- see
-    # PlaceholderTrigger.trigger and Placeholder.flow-meta.xml.
-    - >
-      sf code-analyzer run
-      --target "force-app/main/default/classes"
-      --target "force-app/main/default/triggers"
-      --target "force-app/main/default/flows"
-      --rule-selector "pmd:EnforcedApexRules,flow:Recommended"
-      --config-file code-analyzer.yml
-      --output-file "${CODE_ANALYZER_REPORT}"
-      --view detail
-    # Translate Code Analyzer's own JSON schema into SonarQube's generic issue import format.
-    - sf cat transform -i "${CODE_ANALYZER_REPORT}" -f sonar -o "${SONAR_ISSUES_REPORT}" --project-relative
+    # Targets are the package directories in sfdx-project.json. sf code-analyzer
+    # errors hard if a --target path doesn't exist (unlike the old pmd binary);
+    # see PlaceholderTrigger.trigger and Placeholder.flow-meta.xml.
+    - |
+      source ./scripts/bash/package_dirs.sh
+      targets=()
+      while IFS= read -r dir; do
+        targets+=(--target "$dir")
+      done < <(sf_package_dirs)
+      sf code-analyzer run "${targets[@]}" \
+        --rule-selector "pmd:EnforcedApexRules,flow:Recommended" \
+        --config-file code-analyzer.yml \
+        --output-file "${CODE_ANALYZER_REPORT}" \
+        --view detail
+    # Translate Code Analyzer's own JSON schema into each requested format.
+    - |
+      for format in ${CODE_ANALYZER_FORMATS//,/ }; do
+        case "$format" in
+          sonar)       output="sonar-issues.json" ;;
+          codeclimate) output="gl-code-quality-report.json" ;;
+          sarif)       output="code-analyzer.sarif" ;;
+          junit)       output="code-analyzer-junit.xml" ;;
+          *) echo "Unsupported CODE_ANALYZER_FORMATS entry '$format' (expected sonar, codeclimate, sarif or junit)."; exit 1 ;;
+        esac
+        sf cat transform -i "${CODE_ANALYZER_REPORT}" -f "$format" -o "$output" --project-relative
+      done
   artifacts:
     paths:
       - "${CODE_ANALYZER_REPORT}"
-      - "${SONAR_ISSUES_REPORT}"
+      - sonar-issues.json
+      - gl-code-quality-report.json
+      - code-analyzer.sarif
+      - code-analyzer-junit.xml
+    reports:
+      codequality: gl-code-quality-report.json
     expire_in: 2 weeks
 
 ####################################################
 # SonarQube quality gate analysis.
-# Remove this job if you are not running SonarQube.
+# Runs only when SONAR_URL is set (with SONAR_TOKEN); otherwise it is skipped.
+# Needs "sonar" in COVERAGE_FORMATS and CODE_ANALYZER_FORMATS to import
+# coverage and Code Analyzer issues.
 # `needs` limits artifact downloads to the listed jobs, so the predeploy
 # validations must be listed to pass coverage-sonar.xml through. They are
 # optional because only the ones matching the MR target exist (none on
@@ -113,11 +135,13 @@ quality:
     - job: "test:predeploy:prd"
       optional: true
   rules:
+    - if: $SONAR_URL == null || $SONAR_URL == ""
+      when: never
     - !reference [.skip-org-branch-sources, rules]
     - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $FULLQA_BRANCH || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $DEV_BRANCH || ($BRANCHING_MODEL == 'release' && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^release\//)
       changes:
-        - "force-app/main/default/classes/*.cls"
-        - "force-app/main/default/triggers/*.trigger"
+        - "**/*.cls"
+        - "**/*.trigger"
       variables:
         SONAR_REF: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
       when: always
@@ -133,23 +157,20 @@ quality:
     SONAR_HOST_URL: $SONAR_URL
     SONAR_GATE: "false"
   script:
+    # Import coverage and Code Analyzer issues only when their reports exist
     - |
+      set -- \
+        -Dsonar.qualitygate.wait=$SONAR_GATE \
+        -Dsonar.projectKey=$CI_PROJECT_PATH_SLUG \
+        -Dsonar.gitlab.ref_name=$SONAR_REF \
+        -Dsonar.gitlab.commit_sha=$CI_COMMIT_SHORT_SHA
       if [ -f coverage-sonar.xml ]; then
-        sonar-scanner \
-          -Dsonar.qualitygate.wait=$SONAR_GATE \
-          -Dsonar.projectKey=$CI_PROJECT_PATH_SLUG \
-          -Dsonar.gitlab.ref_name=$SONAR_REF \
-          -Dsonar.gitlab.commit_sha=$CI_COMMIT_SHORT_SHA \
-          -Dsonar.coverageReportPaths=coverage-sonar.xml \
-          -Dsonar.externalIssuesReportPaths=sonar-issues.json
-      else
-        sonar-scanner \
-          -Dsonar.qualitygate.wait=$SONAR_GATE \
-          -Dsonar.projectKey=$CI_PROJECT_PATH_SLUG \
-          -Dsonar.gitlab.ref_name=$SONAR_REF \
-          -Dsonar.gitlab.commit_sha=$CI_COMMIT_SHORT_SHA \
-          -Dsonar.externalIssuesReportPaths=sonar-issues.json
+        set -- "$@" -Dsonar.coverageReportPaths=coverage-sonar.xml
       fi
+      if [ -f sonar-issues.json ]; then
+        set -- "$@" -Dsonar.externalIssuesReportPaths=sonar-issues.json
+      fi
+      sonar-scanner "$@"
 
 ####################################################
 # MR GitLab Workflow Compliance Checks (main + sandbox).

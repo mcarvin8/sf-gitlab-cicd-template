@@ -120,8 +120,8 @@ function notify_build_payload() {
 function notify_send_message() {
     local message="$1"
     local webhook="${NOTIFY_WEBHOOK_URL:-}"
-    local provider="${NOTIFY_PROVIDER:-slack}"
-    provider="${provider,,}"
+    local provider
+    provider=$(printf '%s' "${NOTIFY_PROVIDER:-slack}" | tr '[:upper:]' '[:lower:]')
 
     if [[ -z "${webhook}" ]]; then
         echo "NOTIFY_WEBHOOK_URL not set, skipping notification."

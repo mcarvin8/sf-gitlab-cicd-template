@@ -103,6 +103,16 @@ variables:
   NOTIFY_WEBHOOK_URL: ""
   # Webhook format: slack, teams, discord, googlechat, mattermost or generic (see scripts/bash/notify.sh).
   NOTIFY_PROVIDER: "slack"
+  # Comma-separated apex-code-coverage-transformer formats written after deploys,
+  # validations and test runs (coverage-<format>.<ext>): sonar, cobertura, html,
+  # jacoco, lcovonly, clover, ... cobertura is always added for GitLab MR coverage.
+  COVERAGE_FORMATS: "sonar,cobertura,html"
+  # Comma-separated sf-cat formats for code-analyzer-check results: codeclimate
+  # (GitLab Code Quality MR widget), sonar (quality job), sarif, junit.
+  CODE_ANALYZER_FORMATS: "codeclimate,sonar"
+  # SonarQube server URL; the quality job is skipped while empty. Set SONAR_TOKEN
+  # as a masked CI/CD variable.
+  SONAR_URL: ""
   # Space-separated list of required substrings for MR source branch names.
   # pre-merge-check fails any branch not containing one of these strings.
   # Leave empty to skip branch name enforcement entirely.

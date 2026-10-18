@@ -16,12 +16,12 @@ ENV SF_AUTOUPDATE_DISABLE=true \
     SF_CI_HEARTBEAT_FREQUENCY_MS=60000 \
     NODE_NO_WARNINGS=1
 
-# Install the pipeline's sf CLI plugins
+# Install the pipeline's sf CLI plugins from sf-plugins.txt (the same list
+# .install-sf-plugins installs at runtime)
 # Print Salesforce CLI version in format accepted for Salesforce CLI bugs on GitHub
-RUN echo y | sf plugins install sfdx-git-delta@^7.3.0 && \
-    echo y | sf plugins install apex-code-coverage-transformer@latest && \
-    echo y | sf plugins install sf-package-list@latest && \
-    echo y | sf plugins install apextestlist@^1.15.0 && \
-    sf plugins install code-analyzer@latest && \
-    echo y | sf plugins install sf-cat@latest && \
+COPY sf-plugins.txt /tmp/sf-plugins.txt
+RUN grep -vE '^[[:space:]]*(#|$)' /tmp/sf-plugins.txt | while read -r plugin; do \
+        echo y | sf plugins install "$plugin" || exit 1; \
+    done && \
+    rm /tmp/sf-plugins.txt && \
     sf version --verbose --json

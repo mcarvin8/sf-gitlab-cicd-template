@@ -34,7 +34,7 @@ SUMMARY=$(jq '.summary' "$TEST_RESULT_FILE")
 
 # Extract hostname and clean it
 HOSTNAME=$(echo "$SUMMARY" | jq -r '.hostname')
-FIRST_PART=$(echo "$HOSTNAME" | grep -oP '(?<=//).*?(?=\.)')
+FIRST_PART=$(echo "$HOSTNAME" | sed -nE 's#^[^:]*://([^./:]+)\..*#\1#p')
 
 if [[ -n "$FIRST_PART" ]]; then
     HOSTNAME="$FIRST_PART"

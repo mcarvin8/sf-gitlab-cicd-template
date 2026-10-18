@@ -19,7 +19,7 @@ set -e
 function check_commit_age() {
     COMMIT_TIMESTAMP=$(git show -s --format=%ct "$SHA")
     CURRENT_TIMESTAMP=$(date +%s)
-    THREE_WEEKS_AGO=$(date -d '3 weeks ago' +%s)
+    THREE_WEEKS_AGO=$(( CURRENT_TIMESTAMP - 21 * 24 * 60 * 60 ))
 
     if (( COMMIT_TIMESTAMP < THREE_WEEKS_AGO )); then
         echo "SHA $SHA is older than 3 weeks. Rollbacks are only allowed for SHAs made in the past 3 weeks."

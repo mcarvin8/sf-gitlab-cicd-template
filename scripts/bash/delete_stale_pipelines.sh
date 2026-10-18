@@ -19,7 +19,8 @@ if [[ -z "${OWNER_PAT_VALUE:-}" ]]; then
 fi
 
 api_url="https://${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/pipelines"
-updated_before=$(date -d "1 month ago" +%Y-%m-%d)
+# 30 days ago, via jq rather than GNU-only `date -d`
+updated_before=$(jq -rn 'now - 30 * 86400 | strftime("%Y-%m-%d")')
 page=1
 per_page=100
 pipeline_ids=()

@@ -1,0 +1,9 @@
+# Salesforce CLI plugins the pipeline needs, one "name@version" per line.
+# Single source for the Dockerfile image build and for .install-sf-plugins
+# (SF_INSTALL_PLUGINS: "true"). Blank lines and lines starting with # are ignored.
+sfdx-git-delta@^7.3.0
+apex-code-coverage-transformer@latest
+sf-package-list@latest
+apextestlist@^1.15.0
+code-analyzer@latest
+sf-cat@latest

@@ -31,7 +31,7 @@ Edit the new file. Replace all `dev` / `DEV` references and the `$DEV_BRANCH` br
 
 Git-tracked deletions need no job of their own: `deploy:[ORG]` and `test:predeploy:[ORG]` include them (see `AUTO_DESTROY` in `.gitlab-ci.yml`).
 
-Also add `test:predeploy:[ORG]` (with `optional: true`) to the `needs` list of the `quality` job in `test-quality-jobs.yml`, so SonarQube receives that org's validation coverage.
+Also add `test:predeploy:[ORG]` (with `optional: true`) to the `needs` list of the `quality` job in `test-quality-jobs.yml`, so SonarQube (when `SONAR_URL` is set) receives that org's validation coverage.
 
 #### Values to update:
 
