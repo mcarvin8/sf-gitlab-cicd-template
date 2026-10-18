@@ -43,7 +43,7 @@ stages:
 
 ####################################################
 # Global CI/CD variables.
-# Secrets (JWT private keys, PAT_VALUE, SLACK_WEBHOOK_URL, etc.) are set in
+# Secrets (JWT private keys, PAT_VALUE, NOTIFY_WEBHOOK_URL, etc.) are set in
 # GitLab project CI/CD variable settings, not here.
 ####################################################
 variables:
@@ -99,8 +99,10 @@ variables:
   # deployment has no other Apex to resolve tests from.
   # Example: "AccountTriggerHandlerTest ContactTriggerHandlerTest"
   DESTRUCTIVE_TESTS: ""
-  # Slack webhook URL for deploy/test status notifications. Remove or leave empty to disable.
-  SLACK_WEBHOOK_URL: ""
+  # Incoming webhook URL for deploy/test status notifications. Remove or leave empty to disable.
+  NOTIFY_WEBHOOK_URL: ""
+  # Webhook format: slack, teams, discord, googlechat, mattermost or generic (see scripts/bash/notify.sh).
+  NOTIFY_PROVIDER: "slack"
   # Space-separated list of required substrings for MR source branch names.
   # pre-merge-check fails any branch not containing one of these strings.
   # Leave empty to skip branch name enforcement entirely.

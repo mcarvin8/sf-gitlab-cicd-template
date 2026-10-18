@@ -12,7 +12,7 @@ Fork or clone this repository as the starting point for a new SFDX project and y
 4. Code quality gates
 5. Automated rollbacks
 6. Sandbox creation and refresh automation
-7. Slack notifications
+7. Chat notifications (Slack, Teams, Discord, Google Chat, Mattermost)
 8. Metadata-specific handling (i.e. Einstein Bots, Connected Apps, Experience Cloud Sites)
 
 and more!
@@ -43,7 +43,7 @@ and more!
   - [Connected Apps](#connected-apps)
   - [Einstein Bots](#einstein-bots)
   - [Experience Cloud Bundles](#experience-cloud-bundles)
-- [Slack Integration](#slack-integration)
+- [Chat Notifications](#chat-notifications)
 - [Branch Protection](#branch-protection)
 - [Adapting to Other CI/CD Platforms](#adapting-to-other-cicd-platforms)
   - [Pre-defined GitLab CI/CD Variables](#pre-defined-gitlab-cicd-variables)
@@ -57,7 +57,7 @@ and more!
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **SFDX project skeleton** | `sfdx-project.json`, `force-app/`, `config/`, `.forceignore`, namespace-ready packaged plugin dependencies                                                                                                                                                                                                                                                   |
 | **CI/CD pipeline**        | Modular GitLab pipeline split across `.gitlab/workflows/` (base templates, core jobs, test/quality, maintenance, and per-org files under `orgs/`)                                                                                                                                                                                                            |
-| **Deployment scripting**  | `scripts/bash/` for delta package generation, incremental deploy, destroy, rollback, sandbox refresh, branch back-merge, Slack status posting, etc.                                                                                                                                                                                                          |
+| **Deployment scripting**  | `scripts/bash/` for delta package generation, incremental deploy, destroy, rollback, sandbox refresh, branch back-merge, chat status notifications, etc.                                                                                                                                                                                                          |
 | **Reusable manifests**    | Pre-made `package.xml` files in `scripts/packages/` (Apex, Automation, Bots, Objects, Security & Access, UI, etc.) for retrieves and targeted deploys                                                                                                                                                                                                        |
 | **Static analysis**       | Salesforce Code Analyzer (`code-analyzer.yml`) running the existing PMD ruleset (`scripts/pmd/default_apex.xml`) against Apex plus the Flow engine against Flows, and a SonarQube config (`sonar-project.properties`)                                                                                                                                        |
 | **Quality tooling**       | ESLint, Prettier (with Apex + XML plugins), Husky pre-commit hooks, lint-staged, Jest (LWC). Formatting `.cls`/`.trigger` files via `prettier-plugin-apex` requires a local Java installation (`JAVA_HOME` set or `java` on `PATH`) - not needed to just run the CI pipeline, only for `npm run prettier`/`prettier:verify` and the pre-commit hook locally. |
@@ -89,7 +89,7 @@ Certain CI/CD jobs install Salesforce CLI plugins at run-time when those plugins
 6. **Pick a runner image**. The default is the prebuilt [`mcarvin8/sf-cli:latest`](https://hub.docker.com/r/mcarvin8/sf-cli) image from Docker Hub - it's published automatically from this repo's `Dockerfile` (Salesforce's official `salesforce/cli:latest-full` image plus the pipeline's [plugins](#salesforce-cli-plugins); that base is **amd64-only**, so use amd64 runners or switch the base for ARM), so the pipeline works on its first run. If you need a private image or want to control the update cadence yourself, switch `image` in `.gitlab-ci.yml` to `$CI_REGISTRY_IMAGE:$CI_DEFAULT_BRANCH`, which the GitLab `build` job builds from the `Dockerfile` and pushes to your own registry. That image doesn't exist until `build` has run once, so trigger it first (via the `dockerBuild` schedule, or a push that changes the `Dockerfile`) before switching. If you stay on the Docker Hub image, you can delete `build.yml`. You can also swap in any other image that has `sf` and the plugins installed.
    - `.github/workflows/` (`docker-publish.yml`, `sync-docker-readme.yml`) publish that `mcarvin8/sf-cli` image and its Docker Hub description - they're specific to my own image and push using my Docker Hub credentials. Safe to delete if you're building your own image via the GitLab `build` job or using another registry; only keep/adapt them if you intend to publish your own equivalent image to Docker Hub.
    - **No custom image allowed?** If your GitLab instance blocks Docker-in-Docker builds and you can't use a third-party image, use Salesforce's official image instead. In `.gitlab-ci.yml`, set `image: salesforce/cli:latest-full` and `SF_INSTALL_PLUGINS: "true"`. Every job that needs the six [plugins](#salesforce-cli-plugins) then installs them before it runs (via `.install-sf-plugins`, pulled in by `.authenticate`, `pre-merge-check` and `code-analyzer-check`), adding roughly 30-60s per job and requiring access to the npm registry. The image already ships Java and Python for `code-analyzer-check`. The `SF_*` CLI settings are global variables, so they apply to any image. `latest-full` is amd64-only; pin a version tag (e.g. `salesforce/cli:2.154.4-full`) if you need repeatable builds. You can also delete `build.yml` in that case.
-7. **Remove what you don't need.** Remove the SonarQube job, Slack hook, or maintenance jobs you don't want. The `SLACK_WEBHOOK_URL` global variable in `.gitlab-ci.yml` can be left empty to disable Slack.
+7. **Remove what you don't need.** Remove the SonarQube job, notification hooks, or maintenance jobs you don't want. The `NOTIFY_WEBHOOK_URL` global variable in `.gitlab-ci.yml` can be left empty to disable notifications.
 8. **Push and open a merge request** against an org branch (e.g. `develop`) to see the validate pipeline run.
 
 ## CI/CD Model
@@ -406,15 +406,25 @@ The reportId property of component <xxx> references an object with the ID value 
 
 This can occur even if your orgs have the same record IDs or you try deploying the bundle back to the source org. This warning can be ignored by passing `--ignore-warnings` to the `sf project deploy` commands. This flag is included by default in the provided deployment shell script, but could be updated to either remove the flag if you don't deploy experience bundles or if you only want to include the flag if `ExperienceBundle` is found in the SGD-generated manifest.
 
-## Slack Integration
+## Chat Notifications
 
-Deploy, test, and destroy outcomes can be posted to a Slack channel. Set `SLACK_WEBHOOK_URL` in `.gitlab-ci.yml` (or as a CI/CD variable):
+Deploy, test, and destroy outcomes can be posted to a chat channel through an incoming webhook. Set `NOTIFY_WEBHOOK_URL` (preferably as a masked CI/CD variable) and `NOTIFY_PROVIDER` in `.gitlab-ci.yml`:
 
 ```yaml
-SLACK_WEBHOOK_URL: https://hooks.slack.com/services/
+NOTIFY_WEBHOOK_URL: https://hooks.slack.com/services/...
+NOTIFY_PROVIDER: slack
 ```
 
-Leave the variable empty or remove it to disable Slack notifications.
+| `NOTIFY_PROVIDER` | Webhook                                             | Message format                       |
+| ----------------- | --------------------------------------------------- | ------------------------------------ |
+| `slack` (default) | Slack incoming webhook                              | Block Kit                            |
+| `teams`           | Teams Workflows "Post to a channel when a webhook request is received" | Adaptive Card |
+| `discord`         | Discord channel webhook                             | Embed                                |
+| `googlechat`      | Google Chat space webhook                           | Text message                         |
+| `mattermost`      | Mattermost or Rocket.Chat incoming webhook          | Slack-compatible attachments         |
+| `generic`         | Any endpoint accepting JSON                         | `{status, title, text, fields[]}`    |
+
+Every message is built from the same provider-neutral structure in `scripts/bash/notify.sh`; add a provider by adding a formatter case there. Leave `NOTIFY_WEBHOOK_URL` empty or remove it to disable notifications. A failed post prints a warning and never fails the job.
 
 ## Branch Protection
 
@@ -449,13 +459,13 @@ The scripts in `scripts/bash/` are not GitLab-specific - they read from environm
 | `$CI_PIPELINE_SOURCE`                  | `push` triggers a deploy; `merge_request_event` triggers a validate                                     |
 | `$CI_ENVIRONMENT_NAME`                 | Salesforce org name (scripts treat `production` as production)                                          |
 | `$CI_JOB_STAGE`                        | `test`, `destroy`, or `deploy`                                                                          |
-| `$CI_JOB_STATUS`                       | `success` or `failure` (Slack only)                                                                     |
-| `$GITLAB_USER_NAME`                    | user who triggered the pipeline (Slack only)                                                            |
-| `$CI_JOB_URL`                          | URL of the CI job log (Slack only)                                                                      |
-| `$CI_PROJECT_URL`                      | base URL of the repo (Slack only)                                                                       |
+| `$CI_JOB_STATUS`                       | `success` or `failure` (notifications only)                                                                     |
+| `$GITLAB_USER_NAME`                    | user who triggered the pipeline (notifications only)                                                            |
+| `$CI_JOB_URL`                          | URL of the CI job log (notifications only)                                                                      |
+| `$CI_PROJECT_URL`                      | base URL of the repo (notifications only)                                                                       |
 | `$CI_MERGE_REQUEST_TARGET_BRANCH_NAME` | target branch for sfdx-git-delta `--merge-base` on validate pipelines                                   |
 | `$CI_COMMIT_BEFORE_SHA`                | base SHA for sfdx-git-delta on push (deploy) pipelines                                                  |
-| `$CI_COMMIT_MESSAGE`                   | merge commit message (Slack "Triggered by:" parsing; `deploy:prd` skips `chore(metadata-retrieval)` commits; `[pre-destructive]` marker) |
+| `$CI_COMMIT_MESSAGE`                   | merge commit message (notification "Triggered by:" parsing; `deploy:prd` skips `chore(metadata-retrieval)` commits; `[pre-destructive]` marker) |
 
 ### Custom CI/CD Variables
 
@@ -473,7 +483,8 @@ The scripts in `scripts/bash/` are not GitLab-specific - they read from environm
 | `*_JWT_KEY`                                                                    | private JWT key, stored as a GitLab **File** variable (for example, `DEV_JWT_KEY`); CI receives its temporary file path                                                                                                                   |
 | `*_USERNAME`                                                                   | Salesforce username to authorize for that org                                                                                                                                                                                             |
 | `*_INSTANCE_URL`                                                               | Salesforce My Domain login URL for that org, such as `https://mydomain.my.salesforce.com` or `https://mydomain--sandbox.sandbox.my.salesforce.com`                                                                                        |
-| `$SLACK_WEBHOOK_URL`                                                           | Slack webhook for status posts; leave empty to disable                                                                                                                                                                                    |
+| `$NOTIFY_WEBHOOK_URL`                                                          | Incoming webhook for status notifications; leave empty to disable                                                                                                                                                                         |
+| `$NOTIFY_PROVIDER`                                                             | Webhook format: `slack` (default), `teams`, `discord`, `googlechat`, `mattermost` or `generic`                                                                                                                                            |
 | `$RUNNER_TAG`                                                                  | GitLab runner tag applied to all jobs via the `default:` block                                                                                                                                                                            |
 | `$DEV_ORG_URL`                                                                 | display URL for the dev sandbox environment (cosmetic, shown in GitLab environments)                                                                                                                                                      |
 | `$FULLQA_ORG_URL`                                                              | display URL for the full QA sandbox environment                                                                                                                                                                                           |

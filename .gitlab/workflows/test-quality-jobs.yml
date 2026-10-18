@@ -36,7 +36,7 @@
     - sf apex get test --test-run-id $TEST_RUN_ID --code-coverage -r json -d "coverage" > result.json || true
     - source ./scripts/bash/parse_test_result.sh
   after_script:
-    - source ./scripts/bash/post_test_result.sh; share_slack_update_build
+    - source ./scripts/bash/post_test_result.sh; share_test_result
 
 ####################################################
 # Scan changed Apex and Flows with Salesforce Code Analyzer (PMD + Flow engines).

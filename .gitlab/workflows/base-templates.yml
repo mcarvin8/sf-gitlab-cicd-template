@@ -103,7 +103,7 @@
         fi
       fi
   after_script:
-    - source ./scripts/bash/deploy_slack_status.sh; share_slack_update_build
+    - source ./scripts/bash/deploy_notify_status.sh; share_deploy_status
 
 ####################################################
 # Deploy metadata into a Salesforce org (push pipelines).
@@ -113,7 +113,7 @@
   script:
     - source ./scripts/bash/deploy_metadata_sf.sh
   after_script:
-    - source ./scripts/bash/deploy_slack_status.sh; share_slack_update_build
+    - source ./scripts/bash/deploy_notify_status.sh; share_deploy_status
 
 ####################################################
 # Prepare a web destroy job: convert $PACKAGE (sf-package-list format) to XML.
@@ -138,4 +138,4 @@
   script:
     - source ./scripts/bash/destroy_metadata_sf.sh
   after_script:
-    - source ./scripts/bash/deploy_slack_status.sh; share_slack_update_build
+    - source ./scripts/bash/deploy_notify_status.sh; share_deploy_status

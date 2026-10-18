@@ -2,15 +2,16 @@
 ################################################################################
 # Script: parse_test_result.sh
 # Description: Parses Salesforce test results from JSON output and generates
-#              a formatted Slack payload with test outcome, including failures
-#              and success notifications. Prepares slackPayload.json for posting.
+#              a provider-neutral notification message with the test outcome,
+#              including failures and success notifications. Prepares
+#              testResultMessage.json for post_test_result.sh.
 # Usage: Called from CI/CD pipeline after test execution completes
 # Dependencies: jq
 # Environment Variables Required:
 #   - TEST_RUN_ID: Salesforce test run identifier
 #   - CI_JOB_URL: Link to the CI job for downloading artifacts
 # Input: coverage/test-result-{TEST_RUN_ID}.json
-# Output: slackPayload.json
+# Output: testResultMessage.json
 ################################################################################
 
 # Check if TEST_RUN_ID environment variable is set
@@ -45,28 +46,35 @@ TESTS_RAN=$(echo "$SUMMARY" | jq -r '.testsRan')
 FAILING=$(echo "$SUMMARY" | jq -r '.failing')
 
 if [[ "$OUTCOME" == "Failed" ]]; then
-    SUMMARY_TEXT=":alert: <!channel> Automated unit testing for ${HOSTNAME} has *${OUTCOME}* with ${TESTS_RAN} test runs and ${FAILING} failure(s). Test run ID is ${TEST_RUN_ID}. Download pipeline artifacts from ${CI_JOB_URL}."
+    STATUS="failure"
+    TITLE="Apex tests failed on ${HOSTNAME}"
+    SUMMARY_TEXT="Automated unit testing for ${HOSTNAME} has ${OUTCOME} with ${TESTS_RAN} test runs and ${FAILING} failure(s). Download pipeline artifacts from the job."
 else
-    SUMMARY_TEXT=":orange-check: <!channel> Automated unit testing for ${HOSTNAME} has *${OUTCOME}*. Test run ID is ${TEST_RUN_ID}."
+    STATUS="success"
+    TITLE="Apex tests passed on ${HOSTNAME}"
+    SUMMARY_TEXT="Automated unit testing for ${HOSTNAME} has ${OUTCOME} with ${TESTS_RAN} test runs."
 fi
 
-# Construct the Slack payload
-SLACK_PAYLOAD=$(jq -n \
-    --arg text "Test Runs Finished" \
-    --arg summaryText "$SUMMARY_TEXT" \
+# Construct the provider-neutral notification message (see notify.sh)
+jq -n \
+    --arg status "$STATUS" \
+    --arg title "$TITLE" \
+    --arg text "$SUMMARY_TEXT" \
+    --arg org "$HOSTNAME" \
+    --arg testsRan "$TESTS_RAN" \
+    --arg failing "$FAILING" \
+    --arg testRunId "$TEST_RUN_ID" \
+    --arg jobUrl "${CI_JOB_URL:-}" \
     '{
+        status: $status,
+        title: $title,
         text: $text,
-        blocks: [
-            {
-                type: "section",
-                text: {
-                    type: "mrkdwn",
-                    text: $summaryText
-                }
-            }
+        fields: [
+            {name: "Org", value: $org},
+            {name: "Tests Ran", value: $testsRan},
+            {name: "Failing", value: $failing},
+            {name: "Test Run ID", value: $testRunId},
+            {name: "Job URL", value: $jobUrl}
         ]
-    }')
-
-# Write the JSON string to the file
-echo "$SLACK_PAYLOAD" > slackPayload.json
-echo "Slack payload written to slackPayload.json"
+    }' > testResultMessage.json
+echo "Notification message written to testResultMessage.json"
