@@ -13,7 +13,7 @@
 #              push already applied (Salesforce warns "not found" for those).
 # Usage: Called from CI/CD pipeline during deployment stages
 # Environment Variables Required:
-#   - testclasses: "--tests Class1 --tests Class2 ..." from apextestlist (sf format), or "not a test" for non-Apex packages
+#   - testclasses: "--tests Class1 --tests Class2 ..." from apextestlist (sf format), or empty for non-Apex packages
 #   - CI_PIPELINE_SOURCE: Pipeline trigger type (push, merge_request, etc.)
 #   - CI_ENVIRONMENT_NAME: Target environment (production, sandbox, etc.)
 #   - DEPLOY_PACKAGE, DEPLOY_TIMEOUT
@@ -26,7 +26,7 @@ set -e
 destructive_flags="${destructive_flags:-}"
 
 # Handle non-Apex packages (no tests)
-if [ "$testclasses" == "not a test" ]; then
+if [ -z "$testclasses" ]; then
     if [ "$CI_PIPELINE_SOURCE" != "push" ]; then
         sf project deploy start --dry-run -x $DEPLOY_PACKAGE $destructive_flags -w $DEPLOY_TIMEOUT --verbose --ignore-conflicts --ignore-warnings
     else

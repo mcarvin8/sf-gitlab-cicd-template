@@ -110,7 +110,6 @@
         sed -i '/<consumerKey>/d' "$f" && echo "Stripped consumerKey from: $f"
       done < <(find . -path '*/connectedApps/*.connectedApp-meta.xml' -type f)
       testclasses=$(sf apextests list --format sf -x "$DEPLOY_PACKAGE" --no-warnings --fail-on-empty)
-      [ -z "$testclasses" ] && testclasses="not a test"
     - |
       destructive_flags=""
       if [ "$AUTO_DESTROY" == "true" ] && grep -q '<types>' "$DESTRUCTIVE_CHANGES" 2>/dev/null; then
@@ -126,7 +125,7 @@
         echo "=== Destructive Changes (${destructive_mode}-destructive) ==="
         sf sfpl list -x "$DESTRUCTIVE_CHANGES" || true
         echo "=========================="
-        if [ "$testclasses" == "not a test" ] && [[ "$CI_ENVIRONMENT_NAME" == *production ]] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DESTRUCTIVE_CHANGES"; then
+        if [ -z "$testclasses" ] && [[ "$CI_ENVIRONMENT_NAME" == *production ]] && grep -qE '<name>(ApexClass|ApexTrigger)</name>' "$DESTRUCTIVE_CHANGES"; then
           if [ -z "$DESTRUCTIVE_TESTS" ]; then
             echo "ERROR: DESTRUCTIVE_TESTS is not set. Set it to a space-separated list of test classes before destroying Apex in production."
             exit 1
@@ -195,7 +194,7 @@
           exit 1
         fi
       else
-        testclasses="not a test"
+        testclasses=""
       fi
 
 ####################################################
