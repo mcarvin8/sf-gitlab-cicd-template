@@ -7,6 +7,7 @@
 *.jpg binary
 *.jpeg binary
 *.svg binary
+*.asset binary
 
 # List all binary exceptions here (e.g. Static Resources that are just text).
 *_html.resource text eol=lf
