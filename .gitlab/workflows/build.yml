@@ -4,6 +4,9 @@
 build:
   image: docker:latest
   stage: build
+  retry:
+    max: 2
+    when: runner_system_failure
   services:
     - name: docker:dind
       alias: docker
